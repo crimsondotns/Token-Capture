@@ -3,6 +3,7 @@ node_modules
 .tanstack
 .output
 dist
+dist-pages
 *.log
 .DS_Store
 .env

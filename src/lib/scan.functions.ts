@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { performScan } from "./scan-impl.server";
+import { performScan } from "./scan-impl";
 import type { SourcePref } from "./types";
 
 export const runScan = createServerFn({ method: "POST" })

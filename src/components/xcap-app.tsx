@@ -12,9 +12,8 @@ import { Mark } from "@/components/mark";
 import { Results } from "@/components/results";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { runScan } from "@/lib/scan.functions";
 import { loadSettings, saveSettings } from "@/lib/settings";
-import type { ScanOk, Settings, Source } from "@/lib/types";
+import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +51,20 @@ export function XCapApp() {
     });
   }
 
+  async function executeScan(q: string, src: Source): Promise<ScanResult> {
+    if (import.meta.env.VITE_PAGES === "true") {
+      const { performScan } = await import("@/lib/scan-impl");
+      return performScan({ query: q, source: src });
+    }
+    try {
+      const { runScan } = await import("@/lib/scan.functions");
+      return await runScan({ data: { query: q, source: src } });
+    } catch {
+      const { performScan } = await import("@/lib/scan-impl");
+      return performScan({ query: q, source: src });
+    }
+  }
+
   async function scan() {
     const q = query.trim();
     if (!q) {
@@ -61,7 +74,7 @@ export function XCapApp() {
     setScanning(true);
     setError(null);
     try {
-      const out = await runScan({ data: { query: q, source } });
+      const out = await executeScan(q, source);
       setHasScanned(true);
       if (!out.ok) {
         setResult(null);
@@ -451,7 +464,7 @@ function InstallPanel({ onClose }: { onClose: () => void }) {
         ))}
       </ol>
       <a
-        href="/xcap-extension.zip"
+        href={`${import.meta.env.BASE_URL}xcap-extension.zip`}
         download="xcap-extension.zip"
         className="inline-flex h-11 items-center gap-2 rounded-full bg-fg px-4 font-sans text-sm font-medium text-bg hover:bg-white"
       >
