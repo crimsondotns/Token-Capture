@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    :root {
+        --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        --bg: #0a0a0a;
+        --surface: #141414;
+        --surface-2: #1c1c1c;
+        --fg: #f4f4f5;
+        --muted: #8b8b90;
+        --faint: #636369;
+        --ring: 0 0 0 1px rgba(255,255,255,.08);
+        color-scheme: dark;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        width: 360px;
+        font-family: var(--sans);
+        font-size: 13px;
+        line-height: 1.5;
+        background: var(--bg);
+        color: var(--fg);
+    }
+
+    header {
+        display: flex; align-items: center; gap: 10px;
+        padding: 14px 16px 10px;
+    }
+    header .mark { flex: 0 0 auto; display: flex; }
+    header h1 {
+        font-size: 14px; font-weight: 500;
+        letter-spacing: 0; text-transform: none; color: var(--fg);
+    }
+
+    .section { padding: 8px 16px 12px; }
+
+    label.lab {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--muted); margin-bottom: 8px;
+    }
+    label.lab svg { color: var(--faint); }
+
+    input[type=text] {
+        width: 100%; height: 44px; padding: 0 14px;
+        background: var(--surface); color: var(--fg);
+        border: none; border-radius: 12px;
+        box-shadow: var(--ring);
+        font-family: var(--sans); font-size: 13px; line-height: 1.5;
+    }
+    input[type=text]:focus { outline: none; background: var(--surface-2); }
+    input[type=text]::placeholder { color: var(--faint); }
+
+    .toggle {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 10px 0; cursor: pointer;
+    }
+    .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .box {
+        flex: 0 0 auto; width: 40px; height: 24px; margin-top: 1px;
+        border-radius: 999px; background: var(--surface-2);
+        box-shadow: var(--ring);
+        position: relative;
+        transition: background .15s;
+    }
+    .box::after {
+        content: "";
+        position: absolute; top: 2px; left: 2px;
+        width: 20px; height: 20px; border-radius: 999px;
+        background: var(--muted);
+        transition: transform .15s, background .15s;
+    }
+    .toggle input:checked + .box { background: var(--fg); box-shadow: none; }
+    .toggle input:checked + .box::after { transform: translateX(16px); background: var(--bg); }
+    .toggle input:focus-visible + .box { outline: 2px solid var(--fg); outline-offset: 2px; }
+    .toggle .text { min-width: 0; }
+    .toggle .name { display: block; font-size: 13px; color: var(--fg); }
+    .toggle .why { display: block; font-size: 12px; line-height: 1.5; color: var(--faint); }
+
+    .bar { display: flex; gap: 8px; padding: 8px 16px 12px; }
+    button {
+        flex: 1 1 0; height: 40px; gap: 8px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-family: var(--sans); font-size: 13px; font-weight: 500;
+        letter-spacing: 0; text-transform: none;
+        background: var(--surface); color: var(--fg);
+        border: none; border-radius: 999px; cursor: pointer;
+        box-shadow: var(--ring);
+        transition: background .12s, color .12s;
+    }
+    button:hover { background: var(--surface-2); }
+    button.primary { background: var(--fg); color: var(--bg); box-shadow: none; }
+    button.primary:hover { background: #fff; }
+    button.ok { background: var(--fg); color: var(--bg); }
+
+    #status {
+        display: flex; align-items: center; gap: 6px;
+        min-height: 16px; padding: 0 16px 12px;
+        font-size: 12px; color: var(--muted);
+    }
+
+    footer {
+        padding: 12px 16px 16px;
+        font-size: 12px; line-height: 1.6; color: var(--faint);
+    }
+    footer b { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+    <header>
+        <span class="mark" id="mark"></span>
+        <h1>XCap</h1>
+    </header>
+
+    <div class="section">
+        <label class="lab" for="sheetUrl"><span id="i-sheet"></span>Google Sheet</label>
+        <input type="text" id="sheetUrl" spellcheck="false"
+               placeholder="https://docs.google.com/spreadsheets/d/…">
+    </div>
+
+    <div class="section">
+        <label class="toggle">
+            <input type="checkbox" id="sheetSameTab">
+            <span class="box"></span>
+            <span class="text">
+                <span class="name">Open the sheet in this tab</span>
+                <span class="why">Off opens a new tab and leaves the page behind it</span>
+            </span>
+        </label>
+
+        <label class="toggle">
+            <input type="checkbox" id="deriveAvatar">
+            <span class="box"></span>
+            <span class="text">
+                <span class="name">Build avatar URLs from the CMC id</span>
+                <span class="why">Only when the page carries none of its own</span>
+            </span>
+        </label>
+
+        <label class="toggle">
+            <input type="checkbox" id="nativeAsUcid">
+            <span class="box"></span>
+            <span class="text">
+                <span class="name">Native coins get UCID=<id></span>
+                <span class="why">BTC and the like have no contract for that column</span>
+            </span>
+        </label>
+    </div>
+
+    <div class="bar">
+        <button id="save"><span id="i-save"></span><span>Save</span></button>
+        <button id="show" class="primary"><span id="i-show"></span><span>Scan</span></button>
+    </div>
+
+    <div id="status"></div>
+
+    <footer>
+        The page stays clean. Open a <b>DexScreener</b> pool or a
+        <b>CoinMarketCap</b> coin, then press <b>Scan</b> — nothing is captured on load.
+    </footer>
+
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+import type { CmcRow, DexRow, ScanResult, Source, SourcePref } from "./types";
+
+const UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+const SLUG_ALIASES: Record<string, string> = {
+  btc: "bitcoin",
+  eth: "ethereum",
+  usdt: "tether",
+  usdc: "usd-coin",
+  sol: "solana",
+  bnb: "bnb",
+  xrp: "xrp",
+  doge: "dogecoin",
+  ada: "cardano",
+  avax: "avalanche",
+  trx: "tron",
+  ton: "toncoin",
+  shib: "shiba-inu",
+  pepe: "pepe",
+  wif: "dogwifhat",
+  bonk: "bonk",
+  link: "chainlink",
+  matic: "polygon",
+  pol: "polygon-ecosystem-token",
+};
+
+async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        accept: "application/json,text/plain,*/*",
+        "user-agent": UA,
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Request failed (${res.status})`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Timed out waiting for the source");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
+}
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim();
+}
+
+function num(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export function detectSource(query: string, preferred: SourcePref): Source {
+  if (preferred !== "auto") return preferred;
+  const q = query.trim();
+  if (/dexscreener\.com/i.test(q)) return "dex";
+  if (/coinmarketcap\.com/i.test(q)) return "cmc";
+  if (/^0x[a-fA-F0-9]{40}$/.test(q)) return "dex";
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q) && /[A-Z]/.test(q) && /[a-z]/.test(q)) {
+    return "dex";
+  }
+  return "cmc";
+}
+
+function parseDexTarget(query: string): { chain: string; pair: string } | null {
+  try {
+    const u = new URL(query);
+    const m = u.pathname.match(/^\/([^/]+)\/([^/?#]+)/);
+    if (m && /dexscreener\.com$/i.test(u.hostname.replace(/^www\./, ""))) {
+      return { chain: m[1], pair: m[2] };
+    }
+  } catch {
+    /* not a URL */
+  }
+  const m = query.trim().match(/^(?:https?:\/\/)?(?:www\.)?dexscreener\.com\/([^/]+)\/([^/?#]+)/i);
+  return m ? { chain: m[1], pair: m[2] } : null;
+}
+
+function parseCmcTarget(query: string): { slug?: string; id?: string } {
+  const raw = query.trim();
+  try {
+    const u = new URL(raw);
+    const m = u.pathname.match(/\/currencies\/([^/?#]+)/i);
+    if (m) return { slug: decodeURIComponent(m[1]) };
+  } catch {
+    /* not a URL */
+  }
+  const path = raw.match(/\/currencies\/([^/?#]+)/i);
+  if (path) return { slug: decodeURIComponent(path[1]) };
+  if (/^\d+$/.test(raw)) return { id: raw };
+  const cleaned = raw.replace(/^\$/, "").trim();
+  const alias = SLUG_ALIASES[cleaned.toLowerCase()];
+  return { slug: alias || cleaned.toLowerCase().replace(/\s+/g, "-") };
+}
+
+function formatDexId(p: Record<string, unknown>): string {
+  const id = str(p.dexId);
+  const labels = Array.isArray(p.labels) ? p.labels.map(str).filter(Boolean) : [];
+  const version = labels.find((l) => /^v\d/i.test(l));
+  if (version && id && !id.toLowerCase().replace(/\s+/g, "").includes(version.toLowerCase())) {
+    return `${id}${version}`;
+  }
+  return id;
+}
+
+function dexRowFromPair(p: Record<string, unknown>): DexRow {
+  const base = asRecord(p.baseToken) ?? {};
+  const quote = asRecord(p.quoteToken) ?? {};
+  const info = asRecord(p.info) ?? {};
+  const chain = str(p.chainId);
+  const pool = str(p.pairAddress);
+  return {
+    kind: "dex",
+    symbol: str(base.symbol),
+    chain,
+    dexId: formatDexId(p),
+    quote: str(quote.address) || str(quote.symbol),
+    contract: str(base.address),
+    poolAddress: pool,
+    url: str(p.url) || (chain && pool ? `https://dexscreener.com/${chain}/${pool}` : ""),
+    imageUrl: str(info.imageUrl),
+    priceUsd: str(p.priceUsd),
+  };
+}
+
+async function scanDex(query: string): Promise<ScanResult> {
+  const target = parseDexTarget(query);
+  let pairs: Record<string, unknown>[] = [];
+
+  if (target) {
+    const data = asRecord(
+      await fetchJson(
+        `https://api.dexscreener.com/latest/dex/pairs/${encodeURIComponent(target.chain)}/${encodeURIComponent(target.pair)}`,
+      ),
+    );
+    const list = data?.pairs;
+    const single = asRecord(data?.pair);
+    if (Array.isArray(list)) {
+      pairs = list.map((x) => asRecord(x)).filter((x): x is Record<string, unknown> => !!x);
+    } else if (single) {
+      pairs = [single];
+    }
+    if (!pairs.length) {
+      throw new Error(
+        `No pool at ${target.chain}/${target.pair}. Check the URL, or search by token symbol.`,
+      );
+    }
+  } else {
+    const data = asRecord(
+      await fetchJson(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`,
+      ),
+    );
+    const list = data?.pairs;
+    if (Array.isArray(list)) {
+      pairs = list.map((x) => asRecord(x)).filter((x): x is Record<string, unknown> => !!x);
+    }
+    if (!pairs.length) {
+      throw new Error(`DexScreener found no pools for “${query}”.`);
+    }
+  }
+
+  pairs.sort((a, b) => {
+    const liq = (p: Record<string, unknown>) => {
+      const l = asRecord(p.liquidity);
+      return num(l?.usd) ?? 0;
+    };
+    return liq(b) - liq(a);
+  });
+
+  const rows = pairs.map(dexRowFromPair);
+  const first = rows[0];
+  return {
+    ok: true,
+    source: "dex",
+    query,
+    title: target
+      ? `${first?.symbol || "Pool"} · ${target.chain}`
+      : `Search · ${query}`,
+    subtitle: target
+      ? `${rows.length} pool${rows.length === 1 ? "" : "s"} on this page`
+      : `${rows.length} pool${rows.length === 1 ? "" : "s"} matching “${query}”`,
+    rows,
+  };
+}
+
+type CmcPlatform = {
+  contractAddress?: unknown;
+  contractPlatform?: unknown;
+  contractPlatformId?: unknown;
+  tokenAddress?: unknown;
+  platformName?: unknown;
+  platformId?: unknown;
+};
+
+async function scanCmc(query: string): Promise<ScanResult> {
+  const target = parseCmcTarget(query);
+  const param = target.id
+    ? `id=${encodeURIComponent(target.id)}`
+    : `slug=${encodeURIComponent(target.slug || query)}`;
+  let data: Record<string, unknown> | null = null;
+  try {
+    const body = asRecord(
+      await fetchJson(`https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail?${param}`),
+    );
+    data = asRecord(body?.data);
+  } catch {
+    data = null;
+  }
+  if (!data) {
+    const hint = target.slug || target.id || query;
+    throw new Error(
+      `No CoinMarketCap coin for “${hint}”. Use a /currencies/… URL or a slug such as bitcoin, tether, solana.`,
+    );
+  }
+
+  const id = num(data.id);
+  const symbol = str(data.symbol);
+  const slug = str(data.slug);
+  const platforms = Array.isArray(data.platforms) ? data.platforms : [];
+
+  const rows: CmcRow[] = [];
+  for (const item of platforms) {
+    const p = asRecord(item) as CmcPlatform | null;
+    if (!p) continue;
+    const tokenAddress = str(p.contractAddress) || str(p.tokenAddress);
+    if (!tokenAddress) continue;
+    rows.push({
+      kind: "cmc",
+      avatar: "",
+      symbol,
+      slug,
+      id,
+      platformId: num(p.contractPlatformId) ?? num(p.platformId),
+      platformName: str(p.contractPlatform) || str(p.platformName),
+      tokenAddress,
+    });
+  }
+
+  if (!rows.length) {
+    rows.push({
+      kind: "cmc",
+      avatar: "",
+      symbol,
+      slug,
+      id,
+      platformId: null,
+      platformName: "",
+      tokenAddress: "",
+    });
+  }
+
+  return {
+    ok: true,
+    source: "cmc",
+    query,
+    title: `${symbol || slug} · #${id ?? "—"}`,
+    subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
+    rows,
+  };
+}
+
+export async function performScan(input: {
+  query: string;
+  source: SourcePref;
+}): Promise<ScanResult> {
+  const query = input.query.trim();
+  if (!query) {
+    return { ok: false, error: "Paste a URL, slug, or symbol first — then press Scan." };
+  }
+  const source = detectSource(query, input.source);
+  try {
+    return source === "dex" ? await scanDex(query) : await scanCmc(query);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Scan failed";
+    return { ok: false, error: message };
+  }
+}
