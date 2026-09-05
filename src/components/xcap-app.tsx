@@ -390,7 +390,7 @@ function ChipLogo({ entry }: { entry: HistoryEntry }) {
 
   if (!src) {
     return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-medium text-muted">
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-medium text-muted">
         {(entry.label || "?").slice(0, 1)}
       </span>
     );
@@ -402,10 +402,10 @@ function ChipLogo({ entry }: { entry: HistoryEntry }) {
       key={src}
       src={src}
       alt=""
-      width={24}
-      height={24}
+      width={20}
+      height={20}
       loading="lazy"
-      className="size-6 shrink-0 rounded-full bg-surface-2 object-cover"
+      className="size-5 shrink-0 rounded-full bg-surface-2 object-cover"
       onError={() => setAttempt((n) => n + 1)}
     />
   );
@@ -441,12 +441,12 @@ function History({
         {entries.map((e) => (
           <span
             key={e.query}
-            className="group flex h-11 items-center rounded-full bg-surface pl-2.5 pr-1 shadow-ring transition-colors duration-150 hover:bg-surface-2"
+            className="group flex h-9 items-center gap-1.5 rounded-full bg-surface pl-1.5 pr-2 shadow-ring transition-colors duration-150 hover:bg-surface-2"
           >
             <button
               type="button"
               title={e.query}
-              className="flex min-w-0 items-center gap-2 text-left"
+              className="flex min-w-0 items-center gap-1.5 text-left"
               onClick={() => onPick(e)}
             >
               <ChipLogo entry={e} />
@@ -455,11 +455,13 @@ function History({
             <button
               type="button"
               aria-label={`Forget ${e.label}`}
-              // Visible on touch, where there is no hover to reveal it.
-              className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full text-faint opacity-100 transition-colors duration-150 hover:text-fg sm:opacity-0 sm:group-hover:opacity-100"
+              // Visible on touch, where there is no hover to reveal it. The
+              // chip keeps the space either way, so revealing it moves
+              // nothing beside it.
+              className="flex size-4 shrink-0 items-center justify-center rounded-full text-faint transition-colors duration-150 hover:text-fg sm:opacity-0 sm:group-hover:opacity-100"
               onClick={() => onForget(e)}
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           </span>
         ))}
