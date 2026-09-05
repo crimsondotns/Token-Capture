@@ -317,6 +317,18 @@ export function XCapApp() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                // Enter is handled here rather than left to the form's
+                // implicit submission, which a browser swallows while its own
+                // autofill list is open. isComposing guards an IME: mid-word
+                // Enter is the keystroke that accepts the candidate, not one
+                // that means send.
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                  e.preventDefault();
+                  if (canScan) void scan();
+                }}
+                // No autofill list to swallow that Enter in the first place.
+                autoComplete="off"
                 placeholder={
                   source === "cmc"
                     ? "Ask for a coin — bitcoin, tether, or a CMC URL"
