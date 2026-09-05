@@ -165,13 +165,15 @@ const UNISWAP_V3_ADAPTERS = new Set([
   "swapr", "zyberswap", "horizon", "swapbased",
 ]);
 
-/** Names the API reports, against the adapter the chart URL uses. */
+// Names the API reports, against the adapter the chart URL uses. Every entry
+// here has been read off a real /dex/chart/amm/v3/{adapter}/bars/ request -
+// a guessed one is worse than an empty column, because it looks right.
+//   meteora  -> DdMA1cHc… charts at /amm/v3/solamm/
+//   pumpswap -> CV2m2hK9… charts at /amm/v3/pumpfundex/
 const ADAPTER_ALIASES: Record<string, string[]> = {
   meteora: ["solamm", "meteora"],
-  raydium: ["raydiumamm", "raydium"],
-  orca: ["orcaamm", "orca"],
-  pumpswap: ["pumpswap", "pumpfun"],
-  pumpfun: ["pumpfun", "pumpswap"],
+  pumpswap: ["pumpfundex", "pumpswap"],
+  pumpfun: ["pumpfundex", "pumpfun"],
 };
 
 function normalizeDexId(raw: string): string {
@@ -361,6 +363,18 @@ function parseDetailsBody(raw: string): Record<string, unknown> | null {
   return null;
 }
 
+// Tried in order when a host refuses the page's own origin. None of them is
+// reliable on its own: each is a free service that rate-limits, blocks whole
+// networks, or disappears.
+const CORS_PROXIES: ((url: string) => string)[] = [
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+];
+
+const isProxied = (url: string) =>
+  /corsproxy\.io|allorigins\.win|codetabs\.com|r\.jina\.ai/i.test(url);
+
 async function fetchTextOnce(url: string, signal: AbortSignal): Promise<string> {
   const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
   if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
@@ -380,8 +394,19 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
       // https://dexscreener.com, so the Pages build cannot read it from its
       // own origin and has to borrow someone else's.
       if (err instanceof Error && err.name === "AbortError") throw err;
-      if (!isBrowser() || /corsproxy\.io|r\.jina\.ai/i.test(url)) throw err;
-      return await fetchTextOnce(`https://corsproxy.io/?${encodeURIComponent(url)}`, ctrl.signal);
+      if (!isBrowser() || isProxied(url)) throw err;
+      // corsproxy.io answers 403 to some networks outright, so one proxy is
+      // not a fallback - it is a single point of failure with extra steps.
+      let last = err;
+      for (const proxy of CORS_PROXIES) {
+        try {
+          return await fetchTextOnce(proxy(url), ctrl.signal);
+        } catch (proxyErr) {
+          if (proxyErr instanceof Error && proxyErr.name === "AbortError") throw proxyErr;
+          last = proxyErr;
+        }
+      }
+      throw last;
     }
   } finally {
     clearTimeout(timer);
