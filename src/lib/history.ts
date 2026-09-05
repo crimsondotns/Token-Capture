@@ -64,7 +64,11 @@ export function rememberScan(
     query: query.trim(),
     source,
     label: pairLabel(row) || query.trim(),
-    image: row ? (row.kind === "dex" ? row.imageUrl : row.avatar) : "",
+    // A CMC row carries no avatar of its own - the URL is built from the
+    // coin's id at render time, and the overview is where that already
+    // happened. Reading row.avatar here stored an empty string, which is why
+    // those chips fell back to a letter.
+    image: result.overview?.image || (row ? (row.kind === "dex" ? row.imageUrl : row.avatar) : ""),
     chain: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
     contract: row ? (row.kind === "dex" ? row.contract : row.tokenAddress) : "",
     at: Date.now(),
