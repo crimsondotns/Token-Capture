@@ -16,7 +16,7 @@ export function presentRow(row: ScanRow, settings: Settings): ScanRow {
 
 export function tsvOf(row: ScanRow): string {
   if (row.kind === "dex") {
-    return [row.symbol, row.chain, row.dexId, row.quote, row.contract, row.poolAddress].join("\t");
+    return [row.symbol, row.chain, row.dexId, row.quote, row.contract, row.poolAddress, row.supply].join("\t");
   }
   return [
     row.avatar,
@@ -38,6 +38,8 @@ export function jsonOf(row: ScanRow): Record<string, unknown> {
       protocol: row.dexId,
       poolAddress: row.poolAddress,
       quoteToken: row.quote,
+      supply: row.supply || null,
+      totalSupply: row.totalSupply || null,
     };
   }
   return {
@@ -64,6 +66,7 @@ export function searchFields(row: ScanRow): Record<string, string> {
       quote: row.quote.toLowerCase(),
       contract: row.contract.toLowerCase(),
       pool: row.poolAddress.toLowerCase(),
+      supply: row.supply.toLowerCase(),
     };
   }
   return {
@@ -97,6 +100,8 @@ const ALIASES: Record<string, string> = {
   pair: "pool",
   quote: "quote",
   q: "quote",
+  supply: "supply",
+  circ: "supply",
 };
 
 const EXACT: Record<string, boolean> = { id: true, platformid: true };

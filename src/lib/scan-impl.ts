@@ -49,7 +49,7 @@ async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown> {
       if (err instanceof Error && err.name === "AbortError") {
         throw new Error("Timed out waiting for the source");
       }
-      if (!isBrowser()) throw err;
+      if (!isBrowser() && !url.includes("io.dexscreener.com")) throw err;
       const proxied = `https://corsproxy.io/?${encodeURIComponent(url)}`;
       return await fetchOne(proxied, ctrl.signal);
     }
@@ -154,7 +154,115 @@ function dexRowFromPair(p: Record<string, unknown>): DexRow {
     url: str(p.url) || (chain && pool ? `https://dexscreener.com/${chain}/${pool}` : ""),
     imageUrl: str(info.imageUrl),
     priceUsd: str(p.priceUsd),
+    supply: "",
+    totalSupply: "",
   };
+}
+
+function firstPositive(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return String(v);
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return v.trim();
+    }
+  }
+  return "";
+}
+
+function supplyFromDetails(root: unknown): { circulating: string; total: string } {
+  const rec = asRecord(root) ?? {};
+  const su = asRecord(rec.su) ?? {};
+  const ds = asRecord(rec.ds) ?? {};
+  const cg = asRecord(rec.cg) ?? {};
+  const ti = asRecord(rec.ti) ?? {};
+  const holders = asRecord(rec.holders) ?? {};
+  const circulating = firstPositive(
+    su.circulatingSupply,
+    ds.circulatingSupply,
+    cg.circulatingSupply,
+    ti.circulatingSupply,
+  );
+  const total = firstPositive(
+    su.totalSupply,
+    ds.totalSupply,
+    cg.totalSupply,
+    holders.totalSupply,
+    su.maxSupply,
+    cg.maxSupply,
+  );
+  if (circulating || total) return { circulating, total };
+
+  let circ = "";
+  let tot = "";
+  const queue: unknown[] = [root];
+  let steps = 0;
+  while (queue.length && steps++ < 8000) {
+    const obj = asRecord(queue.shift());
+    if (!obj) continue;
+    for (const [k, v] of Object.entries(obj)) {
+      const key = k.toLowerCase();
+      if (!circ && (key === "circulatingsupply" || key === "circsupply")) circ = firstPositive(v);
+      if (!tot && (key === "totalsupply" || key === "maxsupply")) tot = firstPositive(v);
+      if (v && typeof v === "object") queue.push(v);
+    }
+    if (circ && tot) break;
+  }
+  return { circulating: circ, total: tot };
+}
+
+function supplyFromPair(p: Record<string, unknown>): { circulating: string; total: string } {
+  const price = num(p.priceUsd);
+  const mcap = num(p.marketCap);
+  const fdv = num(p.fdv);
+  return {
+    circulating: price && price > 0 && mcap != null ? String(mcap / price) : "",
+    total: price && price > 0 && fdv != null ? String(fdv / price) : "",
+  };
+}
+
+async function fetchPairDetails(chain: string, pool: string): Promise<Record<string, unknown> | null> {
+  const v4 = `https://io.dexscreener.com/dex/pair-details/v4/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}`;
+  try {
+    return asRecord(await fetchJson(v4, 8000));
+  } catch {
+    try {
+      const v3 = `https://io.dexscreener.com/dex/pair-details/v3/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}`;
+      return asRecord(await fetchJson(v3, 8000));
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Promise<void> {
+  const cap = Math.min(rows.length, 12);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < cap) {
+      const i = cursor++;
+      const row = rows[i];
+      const pair = pairs[i] ?? {};
+      const fallback = supplyFromPair(pair);
+      let details = { circulating: "", total: "" };
+      try {
+        const body = await fetchPairDetails(row.chain, row.poolAddress);
+        if (body) details = supplyFromDetails(body);
+      } catch {
+        /* keep fallback */
+      }
+      const circulating = details.circulating || fallback.circulating;
+      const total = details.total || fallback.total;
+      row.supply = circulating || total;
+      row.totalSupply = total && total !== row.supply ? total : "";
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, cap) }, () => worker()));
+  for (let i = cap; i < rows.length; i++) {
+    const fallback = supplyFromPair(pairs[i] ?? {});
+    rows[i].supply = fallback.circulating || fallback.total;
+    rows[i].totalSupply = fallback.total && fallback.total !== rows[i].supply ? fallback.total : "";
+  }
 }
 
 async function scanDex(query: string): Promise<ScanResult> {
@@ -203,6 +311,7 @@ async function scanDex(query: string): Promise<ScanResult> {
   });
 
   const rows = pairs.map(dexRowFromPair);
+  await fillSupply(rows, pairs);
   const first = rows[0];
   return {
     ok: true,

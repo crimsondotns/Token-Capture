@@ -12,6 +12,8 @@ export type DexRow = {
   url: string;
   imageUrl: string;
   priceUsd: string;
+  supply: string;
+  totalSupply: string;
 };
 
 export type CmcRow = {
@@ -65,6 +67,7 @@ export const DEX_COLUMNS = [
   "Quote",
   "Contract",
   "Pool Address",
+  "Supply",
 ] as const;
 
 export const CMC_COLUMNS = [

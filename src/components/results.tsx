@@ -79,13 +79,27 @@ function Avatar({ src, symbol }: { src?: string; symbol: string }) {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function formatQty(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return raw;
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: n >= 1 ? 2 : 6 }).format(n);
+}
+
+function Field({
+  label,
+  value,
+  copyValue,
+}: {
+  label: string;
+  value: string;
+  copyValue?: string;
+}) {
   if (!value) return null;
   return (
     <div className="flex items-start gap-2 py-1">
       <span className="w-16 shrink-0 pt-0.5 text-xs text-faint">{label}</span>
       <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-fg">{value}</code>
-      <CopyIcon compact getText={() => value} title={`Copy ${label}`} />
+      <CopyIcon compact getText={() => copyValue ?? value} title={`Copy ${label}`} />
     </div>
   );
 }
@@ -209,6 +223,16 @@ export function Results({
                       <Field label="Contract" value={row.contract} />
                       <Field label="Pool" value={row.poolAddress} />
                       <Field label="Quote" value={row.quote} />
+                      <Field
+                        label="Supply"
+                        value={row.supply ? formatQty(row.supply) : ""}
+                        copyValue={row.supply}
+                      />
+                      <Field
+                        label="Total"
+                        value={row.totalSupply ? formatQty(row.totalSupply) : ""}
+                        copyValue={row.totalSupply}
+                      />
                     </div>
                   </>
                 )}
