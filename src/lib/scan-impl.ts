@@ -147,6 +147,107 @@ function parseCmcTarget(query: string): { slug?: string; id?: string } {
   return { slug: alias || cleaned.toLowerCase().replace(/\s+/g, "-") };
 }
 
+// ---- DexID without the extension ---------------------------------------
+//
+// io.dexscreener charts a pool at /dex/chart/amm/v3/{dexId}/bars/{chain}/{pool},
+// and that {dexId} is its own adapter name, which the public API does not
+// report: the API says meteora where the chart says solamm, ramsesv3 where the
+// chart says uniswap. Capturing the URL needs a browser extension hooking the
+// chart Worker, so instead the candidates are tried against the endpoint and
+// the one that answers with bars is the real name.
+
+/** Univ3 forks all chart under the uniswap adapter. */
+const UNISWAP_V3_ADAPTERS = new Set([
+  "uniswap", "ramses", "nile", "pharaoh", "cleopatra", "aerodrome", "velodrome",
+  "thruster", "camelot", "lynex", "swapx", "alienbase", "baseswap", "quickswap",
+  "sushiswap", "sushi", "spookyswap", "equalizer", "thena", "fusionx", "agni",
+  "thick", "kim", "hercules", "sparkdex", "kodiak", "superswap", "dackieswap",
+  "swapr", "zyberswap", "horizon", "swapbased",
+]);
+
+/** Names the API reports, against the adapter the chart URL uses. */
+const ADAPTER_ALIASES: Record<string, string[]> = {
+  meteora: ["solamm", "meteora"],
+  raydium: ["raydiumamm", "raydium"],
+  orca: ["orcaamm", "orca"],
+  pumpswap: ["pumpswap", "pumpfun"],
+  pumpfun: ["pumpfun", "pumpswap"],
+};
+
+function normalizeDexId(raw: string): string {
+  return raw.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+/** Ordered guesses at the chart adapter name, best first. */
+export function chartDexCandidates(p: Record<string, unknown>): string[] {
+  const raw = normalizeDexId(str(p.dexId));
+  if (!raw) return [];
+  const labels = Array.isArray(p.labels) ? p.labels.map(str).map((s) => s.toLowerCase()) : [];
+  const base = raw.replace(/v[2-4]$/, "");
+  const isV4 = labels.includes("v4") || raw.endsWith("v4");
+
+  const out: string[] = [];
+  if (UNISWAP_V3_ADAPTERS.has(base) || UNISWAP_V3_ADAPTERS.has(raw)) {
+    out.push(isV4 ? "uniswapv4" : "uniswap");
+  }
+  out.push(...(ADAPTER_ALIASES[base] ?? []));
+  out.push(raw, base);
+  const version = labels.find((l) => /^v\d/.test(l));
+  if (version && !raw.includes(version)) out.push(base + version);
+  return [...new Set(out.filter(Boolean))];
+}
+
+// A wrong adapter name is refused outright; the right one answers with a
+// protobuf body, which is binary and never short.
+async function chartDexAnswers(
+  dexId: string,
+  chain: string,
+  pool: string,
+  quote: string,
+): Promise<boolean> {
+  const path =
+    `/dex/chart/amm/v3/${encodeURIComponent(dexId)}/bars/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}` +
+    `?res=1440&cb=2&q=${encodeURIComponent(quote)}`;
+  const urls = isBrowser()
+    ? [`https://io.dexscreener.com${path}`]
+    : [`https://io.dexscreener.com${path}`, `https://r.jina.ai/http://io.dexscreener.com${path}`];
+  for (const url of urls) {
+    try {
+      const body = await fetchText(url, 8000);
+      if (body && body.length > 250 && !/cannot get|not found/i.test(body.slice(0, 200))) {
+        return true;
+      }
+    } catch {
+      /* a refusal is an answer too: this name is not the one */
+    }
+  }
+  return false;
+}
+
+async function resolveChartDexId(
+  pair: Record<string, unknown>,
+  chain: string,
+  pool: string,
+  quote: string,
+): Promise<string> {
+  // Four round trips is already slow enough to notice; past that the guess
+  // is not worth the wait.
+  const candidates = chartDexCandidates(pair).slice(0, 4);
+  for (const id of candidates) {
+    if (await chartDexAnswers(id, chain, pool, quote)) return id;
+  }
+  // Cloudflare can refuse every probe, which says nothing about which name is
+  // right. A curated mapping is still a better answer than an empty column;
+  // an uncurated guess is not, so those stay blank.
+  const raw = normalizeDexId(str(pair.dexId));
+  const base = raw.replace(/v[2-4]$/, "");
+  const curated =
+    ADAPTER_ALIASES[base] !== undefined ||
+    UNISWAP_V3_ADAPTERS.has(base) ||
+    UNISWAP_V3_ADAPTERS.has(raw);
+  return curated ? (candidates[0] ?? "") : "";
+}
+
 function dexRowFromPair(p: Record<string, unknown>): DexRow {
   const base = asRecord(p.baseToken) ?? {};
   const quote = asRecord(p.quoteToken) ?? {};
@@ -454,6 +555,15 @@ async function scanDex(query: string): Promise<ScanResult> {
         if (target.quote) row.quote = target.quote;
       }
     }
+  } else if (rows[0] && pairs[0]) {
+    // Only the pool actually being looked at: probing every row would mean
+    // dozens of requests for a column read one row at a time.
+    rows[0].dexId = await resolveChartDexId(
+      pairs[0],
+      rows[0].chain,
+      rows[0].poolAddress,
+      rows[0].quote,
+    );
   }
   await fillSupply(rows, pairs);
 
