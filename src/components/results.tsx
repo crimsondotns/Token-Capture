@@ -119,7 +119,9 @@ function formatPrice(raw: string): string {
 function CoinCard({ overview, rows }: { overview: Overview; rows: ScanRow[] }) {
   const contracts = rows.filter(isCmc);
   return (
-    <div className="mb-3 overflow-hidden rounded-2xl bg-surface shadow-ring">
+    // No fill and no ring: the page is the card's ground, and the rules
+    // between the figures carry the structure the box was drawing.
+    <div className="mb-3 overflow-hidden">
       {/* The head copies every contract as TSV, the way a row header does
           elsewhere: the card replaced those rows, and their copy with them. */}
       <button
