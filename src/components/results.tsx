@@ -86,7 +86,7 @@ function Field({
 async function copyValue_(label: string, text: string) {
   try {
     await writeClipboard(text);
-    toast.success("Copied", { description: label });
+    toast.success("Copied");
   } catch {
     toast.error(`Could not copy ${label}`);
   }

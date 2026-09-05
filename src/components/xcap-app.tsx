@@ -283,7 +283,12 @@ export function XCapApp() {
       {/* Floating: fixed to the viewport rather than sitting at the end of the
           column, so it stays reachable while the results scroll under it. The
           gradient keeps text from colliding with it on the way past. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10 bg-gradient-to-t from-bg via-bg/90 to-transparent">
+      <div
+        // inert, not just a lower z-index: a panel on top stops the clicks,
+        // but Tab would still walk into the field behind it.
+        inert={panel !== null || scanning}
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10 bg-gradient-to-t from-bg via-bg/90 to-transparent"
+      >
         <form
           className="pointer-events-auto mx-auto w-full max-w-3xl px-4"
           onSubmit={(e) => {
@@ -448,7 +453,7 @@ function Overlay({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <button
         type="button"
         aria-label="Close"
