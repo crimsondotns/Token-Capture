@@ -220,6 +220,7 @@ export function Results({
                       <CopyIcon getText={() => tsvOf(row)} title="Copy this row as TSV" />
                     </div>
                     <div className="mt-2 border-t border-border pt-1">
+                      <Field label="DexID" value={row.dexId} />
                       <Field label="Contract" value={row.contract} />
                       <Field label="Pool" value={row.poolAddress} />
                       <Field label="Quote" value={row.quote} />

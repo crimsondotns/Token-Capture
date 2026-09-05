@@ -85,7 +85,7 @@ function num(v: unknown): number | null {
 export function detectSource(query: string, preferred: SourcePref): Source {
   if (preferred !== "auto") return preferred;
   const q = query.trim();
-  if (/dexscreener\.com/i.test(q)) return "dex";
+  if (/dexscreener\.com/i.test(q) || /io\.dexscreener\.com/i.test(q)) return "dex";
   if (/coinmarketcap\.com/i.test(q)) return "cmc";
   if (/^0x[a-fA-F0-9]{40}$/.test(q)) return "dex";
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q) && /[A-Z]/.test(q) && /[a-z]/.test(q)) {
@@ -94,11 +94,29 @@ export function detectSource(query: string, preferred: SourcePref): Source {
   return "cmc";
 }
 
-function parseDexTarget(query: string): { chain: string; pair: string } | null {
+type DexTarget = { chain: string; pair: string; dexId?: string; quote?: string };
+
+function queryParam(raw: string, key: string): string {
+  try {
+    return new URL(raw).searchParams.get(key) || "";
+  } catch {
+    const m = raw.match(new RegExp(`[?&]${key}=([^&]*)`, "i"));
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+}
+
+function parseDexTarget(query: string): DexTarget | null {
   const details = query.match(/\/dex\/pair-details\/v\d+\/([^/?#]+)\/([^/?#]+)/i);
   if (details) return { chain: details[1], pair: details[2] };
-  const bars = query.match(/\/dex\/chart\/.*?\/bars\/([^/?#]+)\/([^/?#]+)/i);
-  if (bars) return { chain: bars[1], pair: bars[2] };
+  const bars = query.match(/\/dex\/chart\/.*?\/([^/]+)\/bars\/([^/?#]+)\/([^/?#]+)/i);
+  if (bars) {
+    return {
+      dexId: bars[1],
+      chain: bars[2],
+      pair: bars[3],
+      quote: queryParam(query, "q"),
+    };
+  }
   try {
     const u = new URL(query);
     const m = u.pathname.match(/^\/([^/]+)\/([^/?#]+)/);
@@ -137,6 +155,32 @@ function formatDexId(p: Record<string, unknown>): string {
     return `${id}${version}`;
   }
   return id;
+}
+
+function chartDexHints(p: Record<string, unknown>): string[] {
+  const formatted = formatDexId(p);
+  const raw = str(p.dexId);
+  const labels = Array.isArray(p.labels) ? p.labels.map(str).map((s) => s.toLowerCase()) : [];
+  const v4 = labels.some((l) => l === "v4" || l.includes("v4"));
+  return [formatted, raw, v4 ? "uniswapv4" : "", "uniswapv4", "uniswap"].filter(Boolean);
+}
+
+async function chartDexExists(dexId: string, chain: string, pool: string): Promise<boolean> {
+  const path = `/dex/chart/amm/v3/${encodeURIComponent(dexId)}/bars/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}?res=1440&cb=2`;
+  try {
+    const body = await fetchText(`https://r.jina.ai/http://io.dexscreener.com${path}`, 8000);
+    return Boolean(body && body.length > 250 && !/cannot get/i.test(body));
+  } catch {
+    return false;
+  }
+}
+
+async function resolveChartDexId(chain: string, pool: string, hints: string[]): Promise<string> {
+  const candidates = [...new Set(hints.map((s) => s.trim().toLowerCase()).filter(Boolean))];
+  for (const id of candidates) {
+    if (await chartDexExists(id, chain, pool)) return id;
+  }
+  return hints[0] || "";
 }
 
 function dexRowFromPair(p: Record<string, unknown>): DexRow {
@@ -254,7 +298,7 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
-    if (!isBrowser()) headers["user-agent"] = UA;
+    if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
     const res = await fetch(url, { signal: ctrl.signal, headers });
     if (!res.ok) throw new Error(`Request failed (${res.status})`);
     return await res.text();
@@ -272,7 +316,8 @@ async function fetchPairDetails(chain: string, pool: string): Promise<Record<str
   ];
   for (const url of urls) {
     try {
-      const rec = parseDetailsBody(await fetchText(url, 10000));
+      const raw = await fetchText(url, 10000);
+      const rec = parseDetailsBody(raw);
       if (rec) return rec;
     } catch {
       /* try the next host */
@@ -281,10 +326,7 @@ async function fetchPairDetails(chain: string, pool: string): Promise<Record<str
   return null;
 }
 
-function dexRowFromDetails(
-  target: { chain: string; pair: string },
-  details: Record<string, unknown>,
-): DexRow {
+function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>): DexRow {
   const cms = asRecord(details.cms) ?? {};
   const cmc = asRecord(details.cmc) ?? {};
   const qi = asRecord(details.qi) ?? {};
@@ -299,8 +341,8 @@ function dexRowFromDetails(
     symbol: str(cms.symbol) || str(cmc.symbol) || str(td.tokenSymbol),
     name: str(cms.name) || str(cmc.name) || str(td.tokenName),
     chain: str(cms.chainId) || target.chain,
-    dexId: str(firstDex.name),
-    quote: "",
+    dexId: target.dexId || str(firstDex.name),
+    quote: target.quote || "",
     contract: str(cms.address) || str(qi.tokenAddress),
     poolAddress: target.pair,
     url: `https://dexscreener.com/${target.chain}/${target.pair}`,
@@ -394,6 +436,21 @@ async function scanDex(query: string): Promise<ScanResult> {
   });
 
   const rows = pairs.map(dexRowFromPair);
+  if (target?.dexId) {
+    const pool = target.pair.toLowerCase();
+    for (const row of rows) {
+      if (!row.poolAddress || row.poolAddress.toLowerCase() === pool) {
+        row.dexId = target.dexId;
+        if (target.quote) row.quote = target.quote;
+      }
+    }
+  } else if (target && rows[0]) {
+    const resolved = await resolveChartDexId(target.chain, target.pair, chartDexHints(pairs[0] ?? {}));
+    if (resolved) {
+      rows[0].dexId = resolved;
+      target.dexId = resolved;
+    }
+  }
   await fillSupply(rows, pairs);
 
   if (!rows.length && target) {
