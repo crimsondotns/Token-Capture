@@ -29,18 +29,6 @@ import { CHIME_NAMES, type ChimeName, playChime, primeChime } from "@/lib/chime"
 import { applyChartHit, cancelScan } from "@/lib/scan-impl";
 import { cn } from "@/lib/utils";
 
-const SAMPLES: { source: Source; label: string; query: string }[] = [
-  { source: "cmc", label: "Bitcoin", query: "https://coinmarketcap.com/currencies/bitcoin/" },
-  { source: "cmc", label: "Tether", query: "https://coinmarketcap.com/currencies/tether/" },
-  { source: "cmc", label: "Solana", query: "https://coinmarketcap.com/currencies/solana/" },
-  { source: "dex", label: "dogwifhat", query: "WIF" },
-  {
-    source: "dex",
-    label: "SOL / USDC",
-    query: "https://dexscreener.com/solana/58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-  },
-];
-
 export function XCapApp() {
   const [source, setSource] = useState<Source>("cmc");
   const [query, setQuery] = useState("");
@@ -197,11 +185,6 @@ export function XCapApp() {
   const idle = (!hasScanned || scanning) && !result;
   const canScan = query.trim().length > 0 && !scanning;
 
-  function pickSample(s: (typeof SAMPLES)[number]) {
-    setQuery(s.query);
-    setSource(s.source);
-  }
-
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
       <header className="shrink-0">
@@ -291,20 +274,7 @@ export function XCapApp() {
                 onForget={(e) => setHistory(forgetScan(e.query))}
                 onClear={() => setHistory(clearHistory())}
               />
-            ) : (
-              <div className="enter enter-3 flex flex-wrap justify-center gap-2 pt-2">
-                {SAMPLES.filter((s) => s.source === source).map((s) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    className="h-11 rounded-full bg-surface px-4 text-sm text-fg shadow-ring transition-colors duration-150 hover:bg-surface-2"
-                    onClick={() => pickSample(s)}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            ) : null}
           </IdleFrame>
         ) : (
           <IdleFrame>
