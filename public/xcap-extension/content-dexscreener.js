@@ -118,6 +118,8 @@ var __XCAP_EXTENSION = true;
         return (h.csValue ? 10000 : 0) + (h.hasAbn ? 1000 : 0) - Math.min(h.cb, 999);
     }
 
+    let announce = false;
+
     function add(raw) {
         const hit = parse(raw);
         if (!hit) return;
@@ -128,8 +130,95 @@ var __XCAP_EXTENSION = true;
         if (prev && score(prev) >= score(hit)) return;
 
         found.set(k, hit);
+        if (!announce) return;
         clearTimeout(timer);
         timer = setTimeout(() => render(false), 700);
+    }
+
+    // Chart bars now fire inside a Web Worker, so wrapping window.fetch is not
+    // enough. Hook Worker/SharedWorker at document_start (before DexScreener
+    // boots) and also listen for URLs the extension background saw on the wire.
+    const OrigWorker = window.Worker;
+    const OrigSharedWorker = window.SharedWorker;
+    const workerBlobs = [];
+
+    function hrefOf(scriptURL) {
+        try {
+            if (typeof scriptURL === 'string') return new URL(scriptURL, location.href).href;
+            if (scriptURL && typeof scriptURL.href === 'string') {
+                return new URL(scriptURL.href, location.href).href;
+            }
+        } catch (e) { /* fall through */ }
+        return String(scriptURL || '');
+    }
+
+    function tapPort(target) {
+        if (!target || typeof target.addEventListener !== 'function') return;
+        target.addEventListener('message', ev => {
+            const d = ev.data;
+            if (!d || typeof d !== 'object' || !d.__xcapUrl) return;
+            try { add(d.__xcapUrl); } catch (e) { /* never break the page */ }
+            try { ev.stopImmediatePropagation(); } catch (e) { /* ignore */ }
+        }, true);
+    }
+
+    function wrapWorkerSource(abs) {
+        const hook = [
+            '(function(){',
+            'var f=self.fetch;',
+            'self.fetch=function(){try{var i=arguments[0];var u=typeof i==="string"?i:(i&&i.url)||"";if(u)self.postMessage({__xcapUrl:String(u)})}catch(e){}return f.apply(this,arguments)};',
+            'var X=self.XMLHttpRequest;',
+            'if(X){var o=X.prototype.open;X.prototype.open=function(m,u){try{if(u)self.postMessage({__xcapUrl:String(u)})}catch(e){}return o.apply(this,arguments)}}',
+            '})();',
+            'importScripts(' + JSON.stringify(abs) + ');'
+        ].join('');
+        const blob = new Blob([hook], { type: 'text/javascript' });
+        const url = URL.createObjectURL(blob);
+        workerBlobs.push(url);
+        return url;
+    }
+
+    if (OrigWorker) {
+        window.Worker = function Worker(scriptURL, options) {
+            options = options || {};
+            const abs = hrefOf(scriptURL);
+            let w;
+            // Module workers can't take importScripts. Leave them to webRequest.
+            if (options.type === 'module') {
+                w = new OrigWorker(scriptURL, options);
+            } else {
+                try {
+                    w = new OrigWorker(wrapWorkerSource(abs), options);
+                } catch (e) {
+                    w = new OrigWorker(scriptURL, options);
+                }
+            }
+            tapPort(w);
+            return w;
+        };
+        window.Worker.prototype = OrigWorker.prototype;
+        Object.defineProperty(window.Worker, 'name', { value: 'Worker' });
+    }
+
+    if (OrigSharedWorker) {
+        window.SharedWorker = function SharedWorker(scriptURL, options) {
+            const abs = hrefOf(scriptURL);
+            const opts = typeof options === 'string' ? { name: options } : (options || {});
+            let sw;
+            if (opts.type === 'module') {
+                sw = new OrigSharedWorker(scriptURL, options);
+            } else {
+                try {
+                    sw = new OrigSharedWorker(wrapWorkerSource(abs), opts);
+                } catch (e) {
+                    sw = new OrigSharedWorker(scriptURL, options);
+                }
+            }
+            tapPort(sw.port);
+            try { sw.port.start(); } catch (e) { /* already started */ }
+            return sw;
+        };
+        window.SharedWorker.prototype = OrigSharedWorker.prototype;
     }
 
     const listAll = () => [...found.values()];
@@ -1112,6 +1201,7 @@ var __XCAP_EXTENSION = true;
         if (document.getElementById('__chart_panel')) render(false);
     };
     function requestScan() {
+        announce = true;
         armCapture();
         render(true);
         if (found.size) show();
@@ -1119,16 +1209,22 @@ var __XCAP_EXTENSION = true;
             'color:#000;font-weight:bold', 'color:#666');
     }
     const onShowRequest = () => { requestScan(); };
+    const onNet = ev => { try { add(ev.detail); } catch (e) { /* ignore */ } };
     document.addEventListener('xcap:config', onStoredConfig);
     document.addEventListener('xcap:show', onShowRequest);
+    document.addEventListener('xcap:net', onNet);
 
     function uninstall() {
         document.removeEventListener('xcap:config', onStoredConfig);
         document.removeEventListener('xcap:show', onShowRequest);
+        document.removeEventListener('xcap:net', onNet);
         clearTimeout(timer);
         window.fetch = origFetch;
         XMLHttpRequest.prototype.open = origOpen;
         XMLHttpRequest.prototype.send = origSend;
+        if (OrigWorker) window.Worker = OrigWorker;
+        if (OrigSharedWorker) window.SharedWorker = OrigSharedWorker;
+        workerBlobs.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) { /* ignore */ } });
         history.pushState = origPush;
         history.replaceState = origReplace;
         window.removeEventListener('popstate', onNav);

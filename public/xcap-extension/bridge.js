@@ -34,4 +34,7 @@ chrome.runtime.onMessage.addListener(message => {
     if (message && message.type === 'xcap:show') {
         document.dispatchEvent(new Event('xcap:show'));
     }
+    if (message && message.type === 'xcap:net' && message.url) {
+        document.dispatchEvent(new CustomEvent('xcap:net', { detail: message.url }));
+    }
 });

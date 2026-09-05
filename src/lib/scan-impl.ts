@@ -95,6 +95,8 @@ export function detectSource(query: string, preferred: SourcePref): Source {
 }
 
 function parseDexTarget(query: string): { chain: string; pair: string } | null {
+  const bars = query.match(/\/dex\/chart\/.*?\/bars\/([^/?#]+)\/([^/?#]+)/i);
+  if (bars) return { chain: bars[1], pair: bars[2] };
   try {
     const u = new URL(query);
     const m = u.pathname.match(/^\/([^/]+)\/([^/?#]+)/);

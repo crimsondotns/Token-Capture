@@ -1,15 +1,21 @@
 {
   "manifest_version": 3,
   "name": "XCap",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Capture DexScreener pools and CoinMarketCap contracts. Nothing runs until you press Scan.",
   "permissions": [
-    "storage"
+    "storage",
+    "webRequest"
   ],
   "host_permissions": [
     "https://dexscreener.com/*",
+    "https://*.dexscreener.com/*",
+    "https://io.dexscreener.com/*",
     "https://coinmarketcap.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Chart & Token Capture",
