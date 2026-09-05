@@ -4,6 +4,7 @@ export type SourcePref = "auto" | Source;
 export type DexRow = {
   kind: "dex";
   symbol: string;
+  name: string;
   chain: string;
   dexId: string;
   quote: string;

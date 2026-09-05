@@ -148,6 +148,7 @@ function dexRowFromPair(p: Record<string, unknown>): DexRow {
   return {
     kind: "dex",
     symbol: str(base.symbol),
+    name: str(base.name),
     chain,
     dexId: formatDexId(p),
     quote: str(quote.address) || str(quote.symbol),
@@ -178,26 +179,61 @@ function supplyFromDetails(root: unknown): { circulating: string; total: string 
   const gp = asRecord(rec.gp) ?? {};
   const cmc = asRecord(rec.cmc) ?? {};
   const cg = asRecord(rec.cg) ?? {};
-  const qi = asRecord(rec.qi) ?? {};
-  const tokenDetails = asRecord(qi.tokenDetails) ?? {};
   return {
     circulating: firstPositive(
       su.circulatingSupply,
       cmc.selfReportedCirculatingSupply,
       cg.circulatingSupply,
     ),
-    total: firstPositive(gp.totalSupply, tokenDetails.tokenSupply, su.totalSupply, cg.totalSupply),
+    // Quick Intel tokenSupply and GoPlus lpTotalSupply are not the
+    // DexScreener tooltip figures — ignore them.
+    total: firstPositive(su.totalSupply, gp.totalSupply, cg.totalSupply, cg.maxSupply),
   };
 }
 
 function supplyFromPair(p: Record<string, unknown>): { circulating: string; total: string } {
   const price = num(p.priceUsd);
   const mcap = num(p.marketCap);
-  const fdv = num(p.fdv);
   return {
     circulating: price && price > 0 && mcap != null ? String(mcap / price) : "",
-    total: price && price > 0 && fdv != null ? String(fdv / price) : "",
+    total: "",
   };
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function cmcSupplyForToken(symbol: string, name: string, contract: string): Promise<{ circulating: string; total: string }> {
+  const needle = contract.toLowerCase();
+  const slugs = [...new Set([slugify(name), slugify(symbol), SLUG_ALIASES[symbol.toLowerCase()] || ""])].filter(
+    (s) => s.length > 1,
+  );
+  for (const slug of slugs) {
+    try {
+      const body = asRecord(
+        await fetchJson(`https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail?slug=${encodeURIComponent(slug)}`),
+      );
+      const data = asRecord(body?.data);
+      if (!data) continue;
+      if (needle.length >= 8 && !JSON.stringify(data).toLowerCase().includes(needle)) continue;
+      const st = asRecord(data.statistics) ?? {};
+      return {
+        circulating: firstPositive(
+          data.selfReportedCirculatingSupply,
+          st.selfReportedCirculatingSupply,
+          st.circulatingSupply,
+        ),
+        total: firstPositive(st.totalSupply),
+      };
+    } catch {
+      /* next slug */
+    }
+  }
+  return { circulating: "", total: "" };
 }
 
 function parseDetailsBody(raw: string): Record<string, unknown> | null {
@@ -261,6 +297,7 @@ function dexRowFromDetails(
   return {
     kind: "dex",
     symbol: str(cms.symbol) || str(cmc.symbol) || str(td.tokenSymbol),
+    name: str(cms.name) || str(cmc.name) || str(td.tokenName),
     chain: str(cms.chainId) || target.chain,
     dexId: str(firstDex.name),
     quote: "",
@@ -290,8 +327,16 @@ async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Pro
       } catch {
         /* keep fallback */
       }
-      const circulating = details.circulating || fallback.circulating;
-      const total = details.total || fallback.total;
+      let fromCmc = { circulating: "", total: "" };
+      if (!details.total || !details.circulating) {
+        try {
+          fromCmc = await cmcSupplyForToken(row.symbol, row.name, row.contract);
+        } catch {
+          /* ignore */
+        }
+      }
+      const circulating = details.circulating || fromCmc.circulating || fallback.circulating;
+      const total = details.total || fromCmc.total;
       row.supply = circulating || total;
       row.totalSupply = total && total !== row.supply ? total : "";
     }

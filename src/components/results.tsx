@@ -82,7 +82,7 @@ function Avatar({ src, symbol }: { src?: string; symbol: string }) {
 function formatQty(raw: string): string {
   const n = Number(raw);
   if (!Number.isFinite(n)) return raw;
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: n >= 1 ? 2 : 6 }).format(n);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: n >= 1 ? 0 : 6 }).format(n);
 }
 
 function Field({
