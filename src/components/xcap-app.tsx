@@ -2,12 +2,12 @@ import {
   ArrowUp,
   Check,
   Download,
-  Loader,
   Settings2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CometSpinner } from "@/components/comet-spinner";
 import { Mark } from "@/components/mark";
 import { Results } from "@/components/results";
 import { Button } from "@/components/ui/button";
@@ -352,7 +352,7 @@ function ScanningDialog({ query, source }: { query: string; source: Source }) {
       className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-bg/80 backdrop-blur-sm"
     >
       <div className="enter flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface px-6 py-8 text-center shadow-composer">
-        <Loader size={28} className="spin-step text-fg" aria-hidden="true" />
+        <CometSpinner size={30} thickness={3} className="text-fg" />
         <div className="w-full space-y-1">
           <p className="text-base font-medium text-fg">
             Scanning {source === "cmc" ? "CoinMarketCap" : "DexScreener"}…

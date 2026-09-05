@@ -83,13 +83,13 @@
   .enter-4 {
     animation-delay: 180ms;
   }
-  /* Lucide's Loader is a ring of spokes, so it reads as a loader only when it
-     steps from spoke to spoke rather than sweeping smoothly. */
-  .spin-step {
-    animation: spin-step 1s steps(8, end) infinite;
-  }
   .pulse-soft {
     animation: pulse-soft 1.6s ease-in-out infinite;
+  }
+  /* The comet's tail is what shows motion, so it sweeps at a constant speed
+     rather than stepping. */
+  .comet {
+    animation: spin-smooth 900ms linear infinite;
   }
   /* A pool URL is longer than any dialog worth showing, so it runs past
      instead of wrapping or being cut off. The track holds two copies and
@@ -104,18 +104,18 @@
   }
 }
 
+@keyframes spin-smooth {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes marquee {
   from {
     transform: translateX(0);
   }
   to {
     transform: translateX(-50%);
-  }
-}
-
-@keyframes spin-step {
-  to {
-    transform: rotate(360deg);
   }
 }
 
