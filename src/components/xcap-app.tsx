@@ -359,7 +359,9 @@ function ScanningDialog({ query, source }: { query: string; source: Source }) {
       // separates the two layers.
       className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-bg/50 backdrop-blur-2xl backdrop-saturate-150"
     >
-      <div className="enter flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface px-6 py-8 text-center shadow-composer">
+      {/* No card: the frosted backdrop is the surface, so a second one behind
+          the text only boxes it in. */}
+      <div className="enter flex w-full max-w-sm flex-col items-center gap-4 px-6 py-8 text-center">
         <CometSpinner size={30} thickness={3} className="text-fg" />
         <div className="w-full space-y-1">
           <p className="text-base font-medium text-fg">
