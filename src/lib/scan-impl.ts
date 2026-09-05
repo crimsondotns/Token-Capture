@@ -29,12 +29,31 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+// A scan fans out into dozens of requests across several hosts, and the only
+// handle the UI has on it is performScan's promise. Rather than thread a
+// signal through every helper, the running scan owns one controller and the
+// two fetch wrappers below join it to their own timeout.
+let activeScan: AbortController | null = null;
+
+export function cancelScan(): void {
+  activeScan?.abort(new DOMException("Scan cancelled", "AbortError"));
+}
+
+// AbortSignal.any is what lets a request die from either its own timeout or
+// the scan being cancelled; without it the two would have to be polled.
+function scanSignal(own: AbortSignal): AbortSignal {
+  const scan = activeScan?.signal;
+  if (!scan) return own;
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([own, scan]);
+  return scan.aborted ? scan : own;
+}
+
 async function fetchOne(url: string, signal: AbortSignal): Promise<unknown> {
   const headers: Record<string, string> = {
     accept: "application/json,text/plain,*/*",
   };
   if (!isBrowser()) headers["user-agent"] = UA;
-  const res = await fetch(url, { signal, headers });
+  const res = await fetch(url, { signal: scanSignal(signal), headers });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
@@ -378,7 +397,7 @@ const isProxied = (url: string) =>
 async function fetchTextOnce(url: string, signal: AbortSignal): Promise<string> {
   const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
   if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
-  const res = await fetch(url, { signal, headers });
+  const res = await fetch(url, { signal: scanSignal(signal), headers });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return await res.text();
 }
@@ -727,10 +746,16 @@ export async function performScan(input: {
     return { ok: false, error: "Paste a URL, slug, or symbol first — then press Scan." };
   }
   const source = detectSource(query, input.source);
+  const ctrl = new AbortController();
+  activeScan?.abort(new DOMException("Superseded", "AbortError"));
+  activeScan = ctrl;
   try {
     return source === "dex" ? await scanDex(query) : await scanCmc(query);
   } catch (err) {
+    if (ctrl.signal.aborted) return { ok: false, error: "Scan cancelled." };
     const message = err instanceof Error ? err.message : "Scan failed";
     return { ok: false, error: message };
+  } finally {
+    if (activeScan === ctrl) activeScan = null;
   }
 }

@@ -5,7 +5,7 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CometSpinner } from "@/components/comet-spinner";
 import { Mark } from "@/components/mark";
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
-import { applyChartHit } from "@/lib/scan-impl";
+import { applyChartHit, cancelScan } from "@/lib/scan-impl";
 import { cn } from "@/lib/utils";
 
 const SAMPLES: { source: Source; label: string; query: string }[] = [
@@ -98,16 +98,30 @@ export function XCapApp() {
     }
   }
 
+  // Cancelling has to survive the in-flight promise resolving anyway: the
+  // requests are aborted, but a scan far enough along can still return a
+  // result, and it is no longer wanted.
+  const scanRun = useRef(0);
+
+  function cancelCurrentScan() {
+    scanRun.current += 1;
+    cancelScan();
+    setScanning(false);
+  }
+
   async function scan() {
     const q = query.trim();
     if (!q) {
       setError("Paste a URL, slug, or symbol first.");
       return;
     }
+    const run = scanRun.current + 1;
+    scanRun.current = run;
     setScanning(true);
     setError(null);
     try {
       const out = await executeScan(q, source);
+      if (scanRun.current !== run) return;
       setHasScanned(true);
       if (!out.ok) {
         setResult(null);
@@ -123,10 +137,11 @@ export function XCapApp() {
       // place to be corrected rather than retyped.
       setQuery("");
     } catch (err) {
+      if (scanRun.current !== run) return;
       setResult(null);
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
-      setScanning(false);
+      if (scanRun.current === run) setScanning(false);
     }
   }
 
@@ -196,7 +211,9 @@ export function XCapApp() {
           />
         </Overlay>
       ) : null}
-      {scanning ? <ScanningDialog query={query} source={source} /> : null}
+      {scanning ? (
+        <ScanningDialog query={query} source={source} onCancel={cancelCurrentScan} />
+      ) : null}
       {panel === "install" ? (
         <Overlay onClose={() => setPanel(null)}>
           <InstallPanel onClose={() => setPanel(null)} />
@@ -346,13 +363,32 @@ function IdleFrame({ children }: { children: React.ReactNode }) {
 // Modal rather than a line in the results: a scan crosses several hosts and
 // can take seconds, and the page underneath is the previous scan's, which is
 // no longer what the answer will be.
-function ScanningDialog({ query, source }: { query: string; source: Source }) {
+function ScanningDialog({
+  query,
+  source,
+  onCancel,
+}: {
+  query: string;
+  source: Source;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-busy="true"
       aria-label="Scanning"
+      // Anywhere, not just the backdrop: there is nothing here to click on
+      // for its own sake, so a click on the spinner means the same thing.
+      onClick={onCancel}
       // Frosted rather than dimmed: a heavy blur with the colour left in, so
       // the results behind stay recognisable as shapes without competing with
       // the card. The tint is light because blur, not darkness, is what
@@ -384,6 +420,13 @@ function ScanningDialog({ query, source }: { query: string; source: Source }) {
             </p>
           )}
         </div>
+        <button
+          type="button"
+          className="text-xs text-faint transition-colors duration-150 hover:text-fg"
+          onClick={onCancel}
+        >
+          Click anywhere or press Esc to cancel
+        </button>
       </div>
     </div>
   );
