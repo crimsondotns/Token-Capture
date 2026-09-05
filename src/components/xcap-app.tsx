@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
+import { playChime, primeChime } from "@/lib/chime";
 import { applyChartHit, cancelScan } from "@/lib/scan-impl";
 import { cn } from "@/lib/utils";
 
@@ -119,6 +120,9 @@ export function XCapApp() {
     scanRun.current = run;
     setScanning(true);
     setError(null);
+    // Built here, on the click, because a context created later has no
+    // gesture behind it and starts muted.
+    if (settings.sound) primeChime();
     try {
       const out = await executeScan(q, source);
       if (scanRun.current !== run) return;
@@ -126,13 +130,16 @@ export function XCapApp() {
       if (!out.ok) {
         setResult(null);
         setError(out.error);
+        if (settings.sound) playChime(false);
         return;
       }
       setResult(out);
       if (!out.rows.length) {
         setError("Nothing found for that query.");
+        if (settings.sound) playChime(false);
         return;
       }
+      if (settings.sound) playChime(true);
       // Only once rows came back: a failed or empty scan leaves the query in
       // place to be corrected rather than retyped.
       setQuery("");
@@ -140,6 +147,7 @@ export function XCapApp() {
       if (scanRun.current !== run) return;
       setResult(null);
       setError(err instanceof Error ? err.message : "Scan failed");
+      if (settings.sound) playChime(false);
     } finally {
       if (scanRun.current === run) setScanning(false);
     }
@@ -493,6 +501,18 @@ function SettingsPanel({
           onChange={(v) => onChange({ deriveAvatar: v })}
           name="Build avatar URLs from the CMC id"
           why="Only when the page carries none of its own"
+        />
+        <Toggle
+          checked={settings.sound}
+          onChange={(v) => {
+            onChange({ sound: v });
+            if (v) {
+              primeChime();
+              playChime(true);
+            }
+          }}
+          name="Chime when a scan finishes"
+          why="For a scan left running in another tab"
         />
         <Toggle
           checked={settings.nativeAsUcid}

@@ -51,6 +51,7 @@ export type Settings = {
   sheetSameTab: boolean;
   deriveAvatar: boolean;
   nativeAsUcid: boolean;
+  sound: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sheetSameTab: false,
   deriveAvatar: true,
   nativeAsUcid: true,
+  sound: true,
 };
 
 export const DEX_COLUMNS = [
