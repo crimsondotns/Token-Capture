@@ -1,3 +1,6 @@
+const BLADE =
+  "M103.6 24.4 L82 64 L103.6 103.6 L64 82 L24.4 103.6 L46 64 L24.4 24.4 L64 46 Z";
+
 export function Mark({ size = 28, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -7,17 +10,13 @@ export function Mark({ size = 28, className }: { size?: number; className?: stri
       className={className}
       aria-hidden="true"
     >
-      <circle cx="64" cy="64" r="64" fill="#f4f4f5" />
-      <g fill="#0a0a0a">
-        <rect x="18" y="34" width="15" height="60" rx="3" />
-        <rect x="49" y="34" width="15" height="60" rx="3" />
-        <polygon points="33,34 48,34 64,94 49,94" />
-        <rect x="72" y="34" width="38" height="15" rx="4" />
-        <rect x="72" y="56.5" width="38" height="15" rx="4" />
-        <rect x="72" y="79" width="38" height="15" rx="4" />
-        <rect x="72" y="34" width="15" height="37.5" rx="4" />
-        <rect x="95" y="56.5" width="15" height="37.5" rx="4" />
-      </g>
+      <path
+        fill="#f4f4f5"
+        stroke="#f4f4f5"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        d={BLADE}
+      />
     </svg>
   );
 }
