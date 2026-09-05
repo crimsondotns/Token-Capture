@@ -83,6 +83,30 @@
   .enter-4 {
     animation-delay: 180ms;
   }
+  /* Lucide's Loader is a ring of spokes, so it reads as a loader only when it
+     steps from spoke to spoke rather than sweeping smoothly. */
+  .spin-step {
+    animation: spin-step 1s steps(8, end) infinite;
+  }
+  .pulse-soft {
+    animation: pulse-soft 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes spin-step {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes grok-enter {

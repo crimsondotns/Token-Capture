@@ -2,7 +2,7 @@ import {
   ArrowUp,
   Check,
   Download,
-  LoaderCircle,
+  Loader,
   Settings2,
   X,
 } from "lucide-react";
@@ -144,7 +144,9 @@ export function XCapApp() {
     }
   }
 
-  const idle = !hasScanned && !scanning && !result;
+  // A scan with nothing to show yet keeps the idle screen: the dialog covers
+  // it, and "Nothing found" would be wrong for a scan still running.
+  const idle = (!hasScanned || scanning) && !result;
   const canScan = query.trim().length > 0 && !scanning;
 
   function pickSample(s: (typeof SAMPLES)[number]) {
@@ -190,6 +192,7 @@ export function XCapApp() {
           />
         </Overlay>
       ) : null}
+      {scanning ? <ScanningDialog query={query} source={source} /> : null}
       {panel === "install" ? (
         <Overlay onClose={() => setPanel(null)}>
           <InstallPanel onClose={() => setPanel(null)} />
@@ -198,12 +201,7 @@ export function XCapApp() {
 
       {/* The composer floats over this, so the last row has to clear it. */}
       <main className="mx-auto flex w-full min-h-0 flex-1 flex-col pb-40">
-        {scanning && !result ? (
-          <IdleFrame>
-            <LoaderCircle size={22} className="animate-spin text-muted" />
-            <p className="text-sm text-muted">Scanning…</p>
-          </IdleFrame>
-        ) : result && result.rows.length ? (
+        {result && result.rows.length ? (
           <Results
             result={result}
             settings={settings}
@@ -300,11 +298,7 @@ export function XCapApp() {
                 aria-label="Scan"
                 className="mb-0.5"
               >
-                {scanning ? (
-                  <LoaderCircle size={18} className="animate-spin" />
-                ) : (
-                  <ArrowUp size={18} />
-                )}
+                <ArrowUp size={18} />
               </Button>
             </div>
           </div>
@@ -341,6 +335,31 @@ function IdleFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-10">
       {children}
+    </div>
+  );
+}
+
+// Modal rather than a line in the results: a scan crosses several hosts and
+// can take seconds, and the page underneath is the previous scan's, which is
+// no longer what the answer will be.
+function ScanningDialog({ query, source }: { query: string; source: Source }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-busy="true"
+      aria-label="Scanning"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm"
+    >
+      <div className="enter flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface px-6 py-8 text-center shadow-composer">
+        <Loader size={28} className="spin-step text-fg" aria-hidden="true" />
+        <div className="space-y-1">
+          <p className="text-base font-medium text-fg">Scanning {source === "cmc" ? "CoinMarketCap" : "DexScreener"}…</p>
+          <p className="pulse-soft truncate text-sm text-muted" title={query}>
+            {query}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
