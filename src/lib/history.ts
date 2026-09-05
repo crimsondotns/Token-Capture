@@ -9,7 +9,7 @@ export type HistoryEntry = {
   source: Source;
   /** What to put on the chip: the token's symbol once it is known. */
   label: string;
-  /** Chain or platform, for the second line. */
+  /** The chain the token lives on - ChainID, or CMC's platform name. */
   detail: string;
   at: number;
 };
@@ -52,11 +52,7 @@ export function rememberScan(
     query: query.trim(),
     source,
     label: row?.symbol || query.trim(),
-    detail: row
-      ? row.kind === "dex"
-        ? [row.dexId, row.chain].filter(Boolean).join(" · ")
-        : row.platformName || row.slug
-      : "",
+    detail: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
     at: Date.now(),
   };
   if (!entry.query) return loadHistory();
