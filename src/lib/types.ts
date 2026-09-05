@@ -10,6 +10,8 @@ export type DexRow = {
   chain: string;
   dexId: string;
   quote: string;
+  /** The quote token's ticker, for pairs written as BASE/QUOTE. */
+  quoteSymbol: string;
   contract: string;
   poolAddress: string;
   url: string;

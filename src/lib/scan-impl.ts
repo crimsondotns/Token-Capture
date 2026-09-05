@@ -285,6 +285,7 @@ function dexRowFromPair(p: Record<string, unknown>): DexRow {
     // and filled from io.dexscreener instead.
     dexId: "",
     quote: str(quote.address) || str(quote.symbol),
+    quoteSymbol: str(quote.symbol),
     contract: str(base.address),
     poolAddress: pool,
     url: str(p.url) || (chain && pool ? `https://dexscreener.com/${chain}/${pool}` : ""),
@@ -494,6 +495,8 @@ function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>):
     chain: str(cms.chainId) || target.chain,
     dexId: target.dexId || dexIdFromDetails(details),
     quote: target.quote || "",
+    // pair-details names the base token, never the quote.
+    quoteSymbol: "",
     contract: str(cms.address) || str(qi.tokenAddress),
     poolAddress: target.pair,
     url: `https://dexscreener.com/${target.chain}/${target.pair}`,

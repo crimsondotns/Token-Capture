@@ -7,12 +7,21 @@ export type HistoryEntry = {
   /** Exactly what was scanned, so replaying it is not a re-derivation. */
   query: string;
   source: Source;
-  /** What to put on the chip: the token's symbol once it is known. */
+  /** What to put on the chip: the pair, as BASE/QUOTE, once it is known. */
   label: string;
   /** The chain the token lives on - ChainID, or CMC's platform name. */
   detail: string;
   at: number;
 };
+
+// A pool is a pair, so the chip says so: TROLL/SOL. The quote's ticker only
+// comes from the public pairs API, so a row built from pair-details alone
+// falls back to the base symbol on its own.
+function pairLabel(row: ScanOk["rows"][number] | undefined): string {
+  if (!row) return "";
+  if (row.kind !== "dex") return row.symbol;
+  return row.quoteSymbol ? `${row.symbol}/${row.quoteSymbol}` : row.symbol;
+}
 
 export function loadHistory(): HistoryEntry[] {
   if (typeof window === "undefined") return [];
@@ -51,7 +60,7 @@ export function rememberScan(
   const entry: HistoryEntry = {
     query: query.trim(),
     source,
-    label: row?.symbol || query.trim(),
+    label: pairLabel(row) || query.trim(),
     detail: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
     at: Date.now(),
   };
