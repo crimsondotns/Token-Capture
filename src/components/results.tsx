@@ -99,9 +99,11 @@ function Field({
   if (!value && !hint) return null;
   return (
     <div className="flex items-start gap-2 py-1">
-      <span className="w-16 shrink-0 pt-0.5 text-xs text-faint">{label}</span>
+      <span className="w-16 shrink-0 pt-0.5 text-xs text-muted">{label}</span>
       {value ? (
-        <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-fg">{value}</code>
+        // The values are addresses read character by character, so they get
+        // the larger size and the brighter of the two greys for the label.
+        <code className="min-w-0 flex-1 break-all font-mono text-sm leading-relaxed text-fg">{value}</code>
       ) : (
         <span className="min-w-0 flex-1 text-xs text-faint">{hint}</span>
       )}

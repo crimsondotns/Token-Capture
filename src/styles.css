@@ -4,13 +4,17 @@
 @source "../spa/**/*.{ts,tsx}";
 
 @theme {
-  --color-bg: #0a0a0a;
-  --color-surface: #141414;
-  --color-surface-2: #1c1c1c;
-  --color-fg: #f4f4f5;
-  --color-muted: #8b8b90;
-  --color-faint: #636369;
-  --color-border: #2a2a2c;
+  /* Contrast against --color-bg, measured: fg 17.8:1, muted 8.8:1,
+     faint 6.2:1. faint was 3.3:1 before, which is below the 4.5:1 floor for
+     body text and is why labels and the column hint had to be squinted at.
+     The surfaces are lifted with them so a card still reads as a card. */
+  --color-bg: #0d0d0e;
+  --color-surface: #1a1a1c;
+  --color-surface-2: #232326;
+  --color-fg: #f5f5f7;
+  --color-muted: #aeaeb6;
+  --color-faint: #91919b;
+  --color-border: #38383f;
   --color-ok: #b8d4b0;
   --color-warn: #d4b8b0;
 
@@ -24,10 +28,10 @@
   --radius-2xl: 1.75rem;
   --radius-3xl: 2rem;
 
-  --shadow-ring: 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --shadow-composer: 0 0 0 1px rgba(255, 255, 255, 0.08),
+  --shadow-ring: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  --shadow-composer: 0 0 0 1px rgba(255, 255, 255, 0.12),
     0 16px 48px rgba(0, 0, 0, 0.45);
-  --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.08),
+  --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.12),
     0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
