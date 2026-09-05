@@ -190,10 +190,18 @@ export function XCapApp() {
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
       <header className="shrink-0">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
-          <Mark size={32} />
-          <div className="min-w-0">
-            <h1 className="text-sm font-medium tracking-tight text-fg">XCap</h1>
-          </div>
+          {/* Mark and name are one target, and it is the way back: a reload
+              is what "start over" means in an app that keeps nothing but its
+              settings and history. */}
+          <button
+            type="button"
+            title="Reload XCap"
+            className="-m-1 flex min-w-0 items-center gap-3 rounded-full p-1 transition-opacity duration-150 hover:opacity-80"
+            onClick={() => window.location.reload()}
+          >
+            <Mark size={32} />
+            <h1 className="truncate text-sm font-medium tracking-tight text-fg">XCap</h1>
+          </button>
           <div className="ml-auto flex items-center gap-1">
             <Button
               size="icon"
