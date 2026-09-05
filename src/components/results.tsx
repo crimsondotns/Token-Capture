@@ -120,9 +120,8 @@ function CoinCard({ overview, rows }: { overview: Overview; rows: ScanRow[] }) {
   const contracts = rows.filter(isCmc);
   return (
     // No fill and no ring: the page is the card's ground, and the rules
-    // between the figures carry the structure the box was drawing. Nothing is
-    // clipped either - a tooltip has to be able to leave the box.
-    <div className="mb-3">
+    // between the figures carry the structure the box was drawing.
+    <div className="mb-3 overflow-hidden">
       {/* The head copies every contract as TSV, the way a row header does
           elsewhere: the card replaced those rows, and their copy with them. */}
       <button
@@ -228,20 +227,11 @@ function Stat({
   hint?: string;
 }) {
   return (
-    <div className="group relative px-3 py-2.5 text-center">
+    // The browser's own tooltip: nothing to position, nothing to clip, and it
+    // behaves the way every other tooltip on the machine does.
+    <div className="px-3 py-2.5 text-center" title={hint}>
       <div className="text-[10px] uppercase tracking-wider text-faint">{label}</div>
       <div className="mt-0.5 truncate text-sm tabular-nums text-fg">{value}</div>
-      {hint ? (
-        // Above the cell and out of the flow, so nothing moves when it
-        // appears. pointer-events-none keeps it from stealing the hover that
-        // is showing it.
-        <div
-          role="tooltip"
-          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 w-max max-w-[15rem] -translate-x-1/2 rounded-xl bg-surface-2 px-2.5 py-1.5 text-left text-xs leading-relaxed text-fg opacity-0 shadow-panel transition-opacity duration-150 group-hover:opacity-100"
-        >
-          {hint}
-        </div>
-      ) : null}
     </div>
   );
 }
