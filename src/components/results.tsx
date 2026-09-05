@@ -120,8 +120,9 @@ function CoinCard({ overview, rows }: { overview: Overview; rows: ScanRow[] }) {
   const contracts = rows.filter(isCmc);
   return (
     // No fill and no ring: the page is the card's ground, and the rules
-    // between the figures carry the structure the box was drawing.
-    <div className="mb-3 overflow-hidden">
+    // between the figures carry the structure the box was drawing. Nothing is
+    // clipped either - a tooltip has to be able to leave the box.
+    <div className="mb-3">
       {/* The head copies every contract as TSV, the way a row header does
           elsewhere: the card replaced those rows, and their copy with them. */}
       <button
@@ -182,19 +183,65 @@ function Preview({ overview }: { overview: Overview }) {
       {/* Divided rather than spaced: three figures of different lengths line
           up on their own columns instead of drifting. */}
       <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
-        <Stat label="Rank" value={overview.rank != null ? `#${overview.rank}` : "—"} />
-        <Stat label="Market cap" value={formatUsd(overview.marketCap)} />
-        <Stat label="Volume 24h" value={formatUsd(overview.volume24h)} />
+        <Stat
+          label="Rank"
+          value={overview.rank != null ? `#${overview.rank}` : "—"}
+          hint={overview.rank != null ? "Position by market cap on CoinMarketCap" : undefined}
+        />
+        <Stat
+          label="Market cap"
+          value={formatUsd(overview.marketCap)}
+          hint={
+            exactUsd(overview.marketCap)
+              ? `${exactUsd(overview.marketCap)} — price × circulating supply`
+              : undefined
+          }
+        />
+        <Stat
+          label="Volume 24h"
+          value={formatUsd(overview.volume24h)}
+          hint={
+            exactUsd(overview.volume24h)
+              ? `${exactUsd(overview.volume24h)} — traded across every pair in the last 24 hours`
+              : undefined
+          }
+        />
       </div>
     </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** Every digit, for a figure the cell had to abbreviate to fit. */
+function exactUsd(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
-    <div className="px-3 py-2.5 text-center">
+    <div className="group relative px-3 py-2.5 text-center">
       <div className="text-[10px] uppercase tracking-wider text-faint">{label}</div>
       <div className="mt-0.5 truncate text-sm tabular-nums text-fg">{value}</div>
+      {hint ? (
+        // Above the cell and out of the flow, so nothing moves when it
+        // appears. pointer-events-none keeps it from stealing the hover that
+        // is showing it.
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 w-max max-w-[15rem] -translate-x-1/2 rounded-xl bg-surface-2 px-2.5 py-1.5 text-left text-xs leading-relaxed text-fg opacity-0 shadow-panel transition-opacity duration-150 group-hover:opacity-100"
+        >
+          {hint}
+        </div>
+      ) : null}
     </div>
   );
 }
