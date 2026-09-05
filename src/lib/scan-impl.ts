@@ -290,6 +290,35 @@ async function fetchPairDetails(chain: string, pool: string): Promise<Record<str
   return null;
 }
 
+// io.dexscreener's pair-details payload carries the DexID the site itself
+// shows, but the key has moved around between schema versions, so it is found
+// by name rather than by a hardcoded path. Breadth-first: the shallowest
+// dexId wins, which is the pair's own rather than a nested related pair's.
+export function dexIdFromDetails(root: unknown): string {
+  const queue: unknown[] = [root];
+  let steps = 0;
+  while (queue.length && steps++ < 5000) {
+    const node = queue.shift();
+    if (Array.isArray(node)) {
+      for (const v of node) if (v && typeof v === "object") queue.push(v);
+      continue;
+    }
+    const rec = asRecord(node);
+    if (!rec) continue;
+    for (const [k, v] of Object.entries(rec)) {
+      if (/^dex_?id$/i.test(k)) {
+        const id = str(v).toLowerCase();
+        // an address here means the key is something else entirely
+        if (id && id.length <= 40 && !/^0x/.test(id) && /^[a-z0-9][a-z0-9._-]*$/.test(id)) {
+          return id;
+        }
+      }
+    }
+    for (const v of Object.values(rec)) if (v && typeof v === "object") queue.push(v);
+  }
+  return "";
+}
+
 function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>): DexRow {
   const cms = asRecord(details.cms) ?? {};
   const cmc = asRecord(details.cmc) ?? {};
@@ -302,7 +331,7 @@ function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>):
     symbol: str(cms.symbol) || str(cmc.symbol) || str(td.tokenSymbol),
     name: str(cms.name) || str(cmc.name) || str(td.tokenName),
     chain: str(cms.chainId) || target.chain,
-    dexId: target.dexId || "",
+    dexId: target.dexId || dexIdFromDetails(details),
     quote: target.quote || "",
     contract: str(cms.address) || str(qi.tokenAddress),
     poolAddress: target.pair,
@@ -326,7 +355,11 @@ async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Pro
       let details = { circulating: "", total: "" };
       try {
         const body = await fetchPairDetails(row.chain, row.poolAddress);
-        if (body) details = supplyFromDetails(body);
+        if (body) {
+          details = supplyFromDetails(body);
+          // The chart URL, when one was pasted, has already set this.
+          if (!row.dexId) row.dexId = dexIdFromDetails(body);
+        }
       } catch {
         /* keep fallback */
       }
