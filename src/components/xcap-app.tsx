@@ -455,10 +455,16 @@ function History({
             <button
               type="button"
               aria-label={`Forget ${e.label}`}
-              // Visible on touch, where there is no hover to reveal it. The
-              // chip keeps the space either way, so revealing it moves
-              // nothing beside it.
-              className="flex size-4 shrink-0 items-center justify-center rounded-full text-faint transition-colors duration-150 hover:text-fg sm:opacity-0 sm:group-hover:opacity-100"
+              // Collapsed to nothing until the chip is hovered - the
+              // negative margin swallows the flex gap the empty box would
+              // otherwise still claim. Touch has no hover, so there it
+              // simply stays open.
+              className={cn(
+                "flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full",
+                "text-faint transition-all duration-150 hover:text-fg",
+                "sm:-ml-1.5 sm:w-0 sm:opacity-0",
+                "sm:group-hover:ml-0 sm:group-hover:w-4 sm:group-hover:opacity-100",
+              )}
               onClick={() => onForget(e)}
             >
               <X size={12} />
