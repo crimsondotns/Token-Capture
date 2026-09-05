@@ -95,6 +95,8 @@ export function detectSource(query: string, preferred: SourcePref): Source {
 }
 
 function parseDexTarget(query: string): { chain: string; pair: string } | null {
+  const details = query.match(/\/dex\/pair-details\/v\d+\/([^/?#]+)\/([^/?#]+)/i);
+  if (details) return { chain: details[1], pair: details[2] };
   const bars = query.match(/\/dex\/chart\/.*?\/bars\/([^/?#]+)\/([^/?#]+)/i);
   if (bars) return { chain: bars[1], pair: bars[2] };
   try {
@@ -173,42 +175,19 @@ function firstPositive(...vals: unknown[]): string {
 function supplyFromDetails(root: unknown): { circulating: string; total: string } {
   const rec = asRecord(root) ?? {};
   const su = asRecord(rec.su) ?? {};
-  const ds = asRecord(rec.ds) ?? {};
+  const gp = asRecord(rec.gp) ?? {};
+  const cmc = asRecord(rec.cmc) ?? {};
   const cg = asRecord(rec.cg) ?? {};
-  const ti = asRecord(rec.ti) ?? {};
-  const holders = asRecord(rec.holders) ?? {};
-  const circulating = firstPositive(
-    su.circulatingSupply,
-    ds.circulatingSupply,
-    cg.circulatingSupply,
-    ti.circulatingSupply,
-  );
-  const total = firstPositive(
-    su.totalSupply,
-    ds.totalSupply,
-    cg.totalSupply,
-    holders.totalSupply,
-    su.maxSupply,
-    cg.maxSupply,
-  );
-  if (circulating || total) return { circulating, total };
-
-  let circ = "";
-  let tot = "";
-  const queue: unknown[] = [root];
-  let steps = 0;
-  while (queue.length && steps++ < 8000) {
-    const obj = asRecord(queue.shift());
-    if (!obj) continue;
-    for (const [k, v] of Object.entries(obj)) {
-      const key = k.toLowerCase();
-      if (!circ && (key === "circulatingsupply" || key === "circsupply")) circ = firstPositive(v);
-      if (!tot && (key === "totalsupply" || key === "maxsupply")) tot = firstPositive(v);
-      if (v && typeof v === "object") queue.push(v);
-    }
-    if (circ && tot) break;
-  }
-  return { circulating: circ, total: tot };
+  const qi = asRecord(rec.qi) ?? {};
+  const tokenDetails = asRecord(qi.tokenDetails) ?? {};
+  return {
+    circulating: firstPositive(
+      su.circulatingSupply,
+      cmc.selfReportedCirculatingSupply,
+      cg.circulatingSupply,
+    ),
+    total: firstPositive(gp.totalSupply, tokenDetails.tokenSupply, su.totalSupply, cg.totalSupply),
+  };
 }
 
 function supplyFromPair(p: Record<string, unknown>): { circulating: string; total: string } {
@@ -221,18 +200,78 @@ function supplyFromPair(p: Record<string, unknown>): { circulating: string; tota
   };
 }
 
-async function fetchPairDetails(chain: string, pool: string): Promise<Record<string, unknown> | null> {
-  const v4 = `https://io.dexscreener.com/dex/pair-details/v4/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}`;
+function parseDetailsBody(raw: string): Record<string, unknown> | null {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
   try {
-    return asRecord(await fetchJson(v4, 8000));
+    const rec = asRecord(JSON.parse(raw.slice(start, end + 1)));
+    if (rec && (rec.su || rec.gp || rec.qi || rec.cmc || rec.cg)) return rec;
   } catch {
+    return null;
+  }
+  return null;
+}
+
+async function fetchText(url: string, timeoutMs: number): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
+    if (!isBrowser()) headers["user-agent"] = UA;
+    const res = await fetch(url, { signal: ctrl.signal, headers });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchPairDetails(chain: string, pool: string): Promise<Record<string, unknown> | null> {
+  const path = `/dex/pair-details/v4/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}`;
+  const urls = [
+    `https://io.dexscreener.com${path}`,
+    `https://r.jina.ai/http://io.dexscreener.com${path}`,
+    `https://r.jina.ai/https://io.dexscreener.com${path}`,
+  ];
+  for (const url of urls) {
     try {
-      const v3 = `https://io.dexscreener.com/dex/pair-details/v3/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}`;
-      return asRecord(await fetchJson(v3, 8000));
+      const rec = parseDetailsBody(await fetchText(url, 10000));
+      if (rec) return rec;
     } catch {
-      return null;
+      /* try the next host */
     }
   }
+  return null;
+}
+
+function dexRowFromDetails(
+  target: { chain: string; pair: string },
+  details: Record<string, unknown>,
+): DexRow {
+  const cms = asRecord(details.cms) ?? {};
+  const cmc = asRecord(details.cmc) ?? {};
+  const qi = asRecord(details.qi) ?? {};
+  const td = asRecord(qi.tokenDetails) ?? {};
+  const gp = asRecord(details.gp) ?? {};
+  const dexes = Array.isArray(gp.dex) ? gp.dex : [];
+  const firstDex = asRecord(dexes[0]) ?? {};
+  const supply = supplyFromDetails(details);
+  const circulating = supply.circulating || supply.total;
+  return {
+    kind: "dex",
+    symbol: str(cms.symbol) || str(cmc.symbol) || str(td.tokenSymbol),
+    chain: str(cms.chainId) || target.chain,
+    dexId: str(firstDex.name),
+    quote: "",
+    contract: str(cms.address) || str(qi.tokenAddress),
+    poolAddress: target.pair,
+    url: `https://dexscreener.com/${target.chain}/${target.pair}`,
+    imageUrl: str(cmc.logo),
+    priceUsd: "",
+    supply: circulating,
+    totalSupply: supply.total && supply.total !== circulating ? supply.total : "",
+  };
 }
 
 async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Promise<void> {
@@ -270,22 +309,21 @@ async function scanDex(query: string): Promise<ScanResult> {
   let pairs: Record<string, unknown>[] = [];
 
   if (target) {
-    const data = asRecord(
-      await fetchJson(
-        `https://api.dexscreener.com/latest/dex/pairs/${encodeURIComponent(target.chain)}/${encodeURIComponent(target.pair)}`,
-      ),
-    );
-    const list = data?.pairs;
-    const single = asRecord(data?.pair);
-    if (Array.isArray(list)) {
-      pairs = list.map((x) => asRecord(x)).filter((x): x is Record<string, unknown> => !!x);
-    } else if (single) {
-      pairs = [single];
-    }
-    if (!pairs.length) {
-      throw new Error(
-        `No pool at ${target.chain}/${target.pair}. Check the URL, or search by token symbol.`,
+    try {
+      const data = asRecord(
+        await fetchJson(
+          `https://api.dexscreener.com/latest/dex/pairs/${encodeURIComponent(target.chain)}/${encodeURIComponent(target.pair)}`,
+        ),
       );
+      const list = data?.pairs;
+      const single = asRecord(data?.pair);
+      if (Array.isArray(list)) {
+        pairs = list.map((x) => asRecord(x)).filter((x): x is Record<string, unknown> => !!x);
+      } else if (single) {
+        pairs = [single];
+      }
+    } catch {
+      pairs = [];
     }
   } else {
     const data = asRecord(
@@ -312,6 +350,19 @@ async function scanDex(query: string): Promise<ScanResult> {
 
   const rows = pairs.map(dexRowFromPair);
   await fillSupply(rows, pairs);
+
+  if (!rows.length && target) {
+    const details = await fetchPairDetails(target.chain, target.pair);
+    if (details) rows.push(dexRowFromDetails(target, details));
+  }
+  if (!rows.length) {
+    throw new Error(
+      target
+        ? `No pool at ${target.chain}/${target.pair}. Check the URL, or search by token symbol.`
+        : `DexScreener found no pools for “${query}”.`,
+    );
+  }
+
   const first = rows[0];
   return {
     ok: true,
