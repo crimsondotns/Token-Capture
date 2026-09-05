@@ -49,37 +49,17 @@ function scanSignal(own: AbortSignal): AbortSignal {
   return scan.aborted ? scan : own;
 }
 
-async function fetchOne(url: string, signal: AbortSignal): Promise<unknown> {
-  const headers: Record<string, string> = {
-    accept: "application/json,text/plain,*/*",
-  };
-  if (!isBrowser()) headers["user-agent"] = UA;
-  const res = await fetch(url, { signal: scanSignal(signal), headers });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return res.json();
-}
-
+/**
+ * JSON over the same ladder of attempts as fetchText, so an API that refuses
+ * this origin - or a proxy that refuses this network - is one failure among
+ * several rather than the end of the scan.
+ */
 async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const body = await fetchText(url, timeoutMs);
   try {
-    try {
-      return await fetchOne(url, ctrl.signal);
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new Error("Timed out waiting for the source");
-      }
-      if (!isBrowser() && !url.includes("io.dexscreener.com")) throw err;
-      const proxied = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      return await fetchOne(proxied, ctrl.signal);
-    }
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Timed out waiting for the source");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
+    return JSON.parse(body);
+  } catch {
+    throw new Error("The source did not answer with JSON");
   }
 }
 
@@ -396,42 +376,48 @@ const CORS_PROXIES: ((url: string) => string)[] = [
 const isProxied = (url: string) =>
   /corsproxy\.io|allorigins\.win|codetabs\.com|r\.jina\.ai/i.test(url);
 
-async function fetchTextOnce(url: string, signal: AbortSignal): Promise<string> {
-  const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
-  if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
-  const res = await fetch(url, { signal: scanSignal(signal), headers });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return await res.text();
-}
-
-async function fetchText(url: string, timeoutMs: number): Promise<string> {
+async function fetchTextOnce(url: string, timeoutMs: number): Promise<string> {
+  // Its own timer per attempt: a shared one lets the first slow proxy spend
+  // the whole budget, and the rest never get a turn.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const timer = setTimeout(
+    () => ctrl.abort(new DOMException("Timed out waiting for the source", "AbortError")),
+    timeoutMs,
+  );
   try {
-    try {
-      return await fetchTextOnce(url, ctrl.signal);
-    } catch (err) {
-      // io.dexscreener answers with Access-Control-Allow-Origin:
-      // https://dexscreener.com, so the Pages build cannot read it from its
-      // own origin and has to borrow someone else's.
-      if (err instanceof Error && err.name === "AbortError") throw err;
-      if (!isBrowser() || isProxied(url)) throw err;
-      // corsproxy.io answers 403 to some networks outright, so one proxy is
-      // not a fallback - it is a single point of failure with extra steps.
-      let last = err;
-      for (const proxy of CORS_PROXIES) {
-        try {
-          return await fetchTextOnce(proxy(url), ctrl.signal);
-        } catch (proxyErr) {
-          if (proxyErr instanceof Error && proxyErr.name === "AbortError") throw proxyErr;
-          last = proxyErr;
-        }
-      }
-      throw last;
-    }
+    const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
+    if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
+    const res = await fetch(url, { signal: scanSignal(ctrl.signal), headers });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    return await res.text();
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The direct request first, then every proxy in turn. io.dexscreener and
+ * coinmarketcap both answer only to their own origin, so a browser build has
+ * to borrow one, and each of the free proxies fails somewhere: 403 on a whole
+ * network, a rate limit, or simply being slow enough to time out.
+ */
+async function fetchText(url: string, timeoutMs: number): Promise<string> {
+  const attempts = [
+    url,
+    ...(isBrowser() && !isProxied(url) ? CORS_PROXIES.map((p) => p(url)) : []),
+  ];
+  let last: unknown = new Error("Request failed");
+  for (const attempt of attempts) {
+    try {
+      return await fetchTextOnce(attempt, timeoutMs);
+    } catch (err) {
+      // A cancelled scan ends everything; one attempt timing out only ends
+      // that attempt.
+      if (activeScan?.signal.aborted) throw err;
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error("Request failed");
 }
 
 async function fetchPairDetails(chain: string, pool: string): Promise<Record<string, unknown> | null> {
@@ -655,8 +641,10 @@ async function scanCmcPage(query: string, slug: string): Promise<ScanOk | null> 
   if (!slug) return null;
   try {
     const html = await fetchText(
+      // Short enough that a hung proxy does not hold the whole scan: there
+      // are two more behind it.
       `https://coinmarketcap.com/currencies/${encodeURIComponent(slug)}/`,
-      12000,
+      9000,
     );
     const rows = rowsFromCmcPage(html, slug);
     if (!rows.length) return null;
