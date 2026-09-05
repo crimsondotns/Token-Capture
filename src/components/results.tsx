@@ -69,7 +69,7 @@ function Field({
         <button
           type="button"
           title={`Copy ${label}`}
-          className="min-w-0 flex-1 cursor-pointer break-all text-left font-mono text-sm leading-relaxed text-fg transition-colors duration-150 hover:text-ok"
+          className="min-w-0 flex-1 cursor-pointer break-all text-left font-mono text-sm leading-relaxed text-fg transition-colors duration-150 hover:text-muted"
           onClick={() => copyValue_(label, copyValue ?? value)}
         >
           {value}
