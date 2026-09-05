@@ -20,6 +20,7 @@ import {
   forgetScan,
   type HistoryEntry,
   loadHistory,
+  logoCandidates,
   rememberScan,
 } from "@/lib/history";
 import { loadSettings, saveSettings } from "@/lib/settings";
@@ -379,26 +380,33 @@ function IdleFrame({ children }: { children: React.ReactNode }) {
 // Modal rather than a line in the results: a scan crosses several hosts and
 // can take seconds, and the page underneath is the previous scan's, which is
 // no longer what the answer will be.
-// A logo that fails to load leaves the first letter behind rather than a
-// broken image or a hole where the alignment used to be.
-function ChipLogo({ src, symbol }: { src: string; symbol: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) {
+// Sources go stale and entries predate the field, so each failure falls
+// through to the next candidate and finally to the first letter, which keeps
+// the row of chips aligned either way.
+function ChipLogo({ entry }: { entry: HistoryEntry }) {
+  const sources = logoCandidates(entry);
+  const [attempt, setAttempt] = useState(0);
+  const src = sources[attempt];
+
+  if (!src) {
     return (
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-medium text-muted">
-        {(symbol || "?").slice(0, 1)}
+        {(entry.label || "?").slice(0, 1)}
       </span>
     );
   }
   return (
     <img
+      // Keyed by the URL so a retry actually reloads: React reuses the node
+      // otherwise and the browser keeps the failed image.
+      key={src}
       src={src}
       alt=""
       width={24}
       height={24}
       loading="lazy"
       className="size-6 shrink-0 rounded-full bg-surface-2 object-cover"
-      onError={() => setFailed(true)}
+      onError={() => setAttempt((n) => n + 1)}
     />
   );
 }
@@ -441,11 +449,8 @@ function History({
               className="flex min-w-0 items-center gap-2 text-left"
               onClick={() => onPick(e)}
             >
-              <ChipLogo src={e.image} symbol={e.label} />
+              <ChipLogo entry={e} />
               <span className="max-w-40 truncate text-sm text-fg">{e.label}</span>
-              {e.detail ? (
-                <span className="max-w-40 truncate text-xs text-faint">{e.detail}</span>
-              ) : null}
             </button>
             <button
               type="button"

@@ -9,10 +9,11 @@ export type HistoryEntry = {
   source: Source;
   /** What to put on the chip: the pair, as BASE/QUOTE, once it is known. */
   label: string;
-  /** The chain the token lives on - ChainID, or CMC's platform name. */
-  detail: string;
-  /** The token's logo, if the source gave one. */
+  /** The token's logo, when the source gave one. */
   image: string;
+  /** Enough to rebuild a logo URL for an entry saved without one. */
+  chain: string;
+  contract: string;
   at: number;
 };
 
@@ -63,8 +64,9 @@ export function rememberScan(
     query: query.trim(),
     source,
     label: pairLabel(row) || query.trim(),
-    detail: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
     image: row ? (row.kind === "dex" ? row.imageUrl : row.avatar) : "",
+    chain: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
+    contract: row ? (row.kind === "dex" ? row.contract : row.tokenAddress) : "",
     at: Date.now(),
   };
   if (!entry.query) return loadHistory();
@@ -76,6 +78,22 @@ export function rememberScan(
   );
   save(next);
   return next;
+}
+
+/**
+ * Where to look for a chip's logo, in order. The stored URL comes first;
+ * DexScreener's token image is derived from the pair itself, which is what
+ * gets an entry saved before logos were kept - or one whose stored URL has
+ * since gone stale - a picture anyway.
+ */
+export function logoCandidates(entry: HistoryEntry): string[] {
+  const out = [entry.image];
+  if (entry.source === "dex" && entry.chain && entry.contract) {
+    out.push(
+      `https://dd.dexscreener.com/ds-data/tokens/${encodeURIComponent(entry.chain)}/${encodeURIComponent(entry.contract)}.png?size=lg`,
+    );
+  }
+  return out.filter(Boolean);
 }
 
 export function forgetScan(query: string): HistoryEntry[] {
