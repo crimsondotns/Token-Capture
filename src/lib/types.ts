@@ -49,6 +49,8 @@ export type Overview = {
   rank: number | null;
   marketCap: string;
   volume24h: string;
+  circulating: string;
+  totalSupply: string;
   url: string;
 };
 

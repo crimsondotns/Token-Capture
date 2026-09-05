@@ -110,11 +110,48 @@ function formatPrice(raw: string): string {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: digits })}`;
 }
 
-/** The coin at a glance, above its contracts: what a CMC page leads with. */
+/**
+ * One card for the coin: what it is doing at the top, then everything worth
+ * copying underneath. Two cards said the same thing twice - the same logo,
+ * the same symbol - and put the contracts a scroll away from the name they
+ * belong to.
+ */
+function CoinCard({ overview, rows }: { overview: Overview; rows: ScanRow[] }) {
+  const contracts = rows.filter(isCmc);
+  return (
+    <div className="mb-3 overflow-hidden rounded-2xl bg-surface shadow-ring">
+      {/* The head copies every contract as TSV, the way a row header does
+          elsewhere: the card replaced those rows, and their copy with them. */}
+      <button
+        type="button"
+        title="Copy every contract as TSV"
+        className="block w-full text-left"
+        onClick={() => copyValue_("rows", contracts.map(tsvOf).join("\n"))}
+      >
+        <Preview overview={overview} />
+      </button>
+      <div className="px-3 pb-2 pt-1">
+        {contracts.map((row, i) => (
+          <Field
+            key={`${row.platformId}-${row.tokenAddress}-${i}`}
+            // The chain is the label when there is one: a coin on four chains
+            // is four lines that would otherwise all read "Contract".
+            label={row.platformName || "Contract"}
+            value={row.tokenAddress}
+          />
+        ))}
+        <Field label="Circulating" value={overview.circulating ? formatQty(overview.circulating) : ""} />
+        <Field label="Total" value={overview.totalSupply ? formatQty(overview.totalSupply) : ""} />
+      </div>
+    </div>
+  );
+}
+
+/** The head of the card: logo, name, price, and the three figures. */
 function Preview({ overview }: { overview: Overview }) {
   const change = overview.change24h;
   return (
-    <div className="mb-3 overflow-hidden rounded-2xl bg-surface shadow-ring">
+    <>
       <div className="flex items-center gap-3 px-4 py-3">
         <Avatar src={overview.image} symbol={overview.symbol} />
         <div className="min-w-0 flex-1">
@@ -147,7 +184,7 @@ function Preview({ overview }: { overview: Overview }) {
         <Stat label="Market cap" value={formatUsd(overview.marketCap)} />
         <Stat label="Volume 24h" value={formatUsd(overview.volume24h)} />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -215,11 +252,12 @@ export function Results({
 
   return (
     <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4">
-      {result.overview ? <Preview overview={result.overview} /> : null}
       {embed ? <DexEmbed chain={embed.chain} pool={embed.poolAddress} /> : null}
 
       <div className="min-h-0 flex-1 overflow-auto pb-2 pt-4">
-        {rows.length === 0 ? (
+        {result.overview ? (
+          <CoinCard overview={result.overview} rows={rows} />
+        ) : rows.length === 0 ? (
           <p className="px-2 py-16 text-center text-sm text-muted">Nothing to show.</p>
         ) : (
           <ul className="space-y-2">

@@ -683,6 +683,12 @@ function overviewFromCmc(data: Record<string, unknown>): Overview {
     rank: num(st.rank) ?? num(data.rank) ?? num(data.cmcRank),
     marketCap: firstPositive(st.marketCap, st.selfReportedMarketCap, st.fullyDilutedMarketCap),
     volume24h: firstPositive(st.volume, st.volume24h),
+    circulating: firstPositive(
+      st.circulatingSupply,
+      data.selfReportedCirculatingSupply,
+      st.selfReportedCirculatingSupply,
+    ),
+    totalSupply: firstPositive(st.totalSupply, st.maxSupply),
     url: slug ? `https://coinmarketcap.com/currencies/${slug}/` : "",
   };
 }
