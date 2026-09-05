@@ -59,8 +59,18 @@ async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown> {
   try {
     return JSON.parse(body);
   } catch {
-    throw new Error("The source did not answer with JSON");
+    /* a reader proxy can wrap the payload in a line or two of its own */
   }
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(body.slice(start, end + 1));
+    } catch {
+      /* not JSON after all */
+    }
+  }
+  throw new Error("The source did not answer with JSON");
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -368,6 +378,11 @@ function parseDetailsBody(raw: string): Record<string, unknown> | null {
 // reliable on its own: each is a free service that rate-limits, blocks whole
 // networks, or disappears.
 const CORS_PROXIES: ((url: string) => string)[] = [
+  // First because it is the one that answers: measured from the Pages build,
+  // r.jina.ai returned CoinMarketCap's JSON in 0.6s while allorigins and
+  // codetabs hung to their timeout and corsproxy answered 403. It takes the
+  // target URL unencoded, appended to its own path.
+  (u) => `https://r.jina.ai/${u}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
