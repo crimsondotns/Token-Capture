@@ -3,9 +3,15 @@ import { defineConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// A project page is served from /<repo>/, so the base has to match the
+// repository's name - and renaming the repository silently breaks the build
+// when that name is written out by hand. Actions already knows it.
+const repo = (process.env.GITHUB_REPOSITORY ?? "").split("/")[1];
+const base = process.env.PAGES_BASE || (repo ? `/${repo}/` : "/");
+
 export default defineConfig({
   root: path.resolve("spa"),
-  base: "/Token-Capture/",
+  base,
   publicDir: path.resolve("public"),
   plugins: [tailwindcss(), viteReact()],
   resolve: {

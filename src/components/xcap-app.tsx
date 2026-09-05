@@ -117,7 +117,11 @@ export function XCapApp() {
       setResult(out);
       if (!out.rows.length) {
         setError("Nothing found for that query.");
+        return;
       }
+      // Only once rows came back: a failed or empty scan leaves the query in
+      // place to be corrected rather than retyped.
+      setQuery("");
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "Scan failed");
