@@ -260,15 +260,28 @@ function parseDetailsBody(raw: string): Record<string, unknown> | null {
   return null;
 }
 
+async function fetchTextOnce(url: string, signal: AbortSignal): Promise<string> {
+  const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
+  if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
+  const res = await fetch(url, { signal, headers });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return await res.text();
+}
+
 async function fetchText(url: string, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const headers: Record<string, string> = { accept: "application/json,text/plain,*/*" };
-    if (!isBrowser() && !/r\.jina\.ai/i.test(url)) headers["user-agent"] = UA;
-    const res = await fetch(url, { signal: ctrl.signal, headers });
-    if (!res.ok) throw new Error(`Request failed (${res.status})`);
-    return await res.text();
+    try {
+      return await fetchTextOnce(url, ctrl.signal);
+    } catch (err) {
+      // io.dexscreener answers with Access-Control-Allow-Origin:
+      // https://dexscreener.com, so the Pages build cannot read it from its
+      // own origin and has to borrow someone else's.
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      if (!isBrowser() || /corsproxy\.io|r\.jina\.ai/i.test(url)) throw err;
+      return await fetchTextOnce(`https://corsproxy.io/?${encodeURIComponent(url)}`, ctrl.signal);
+    }
   } finally {
     clearTimeout(timer);
   }
