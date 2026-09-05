@@ -68,7 +68,6 @@ export const DEX_COLUMNS = [
   "Quote",
   "Contract",
   "Pool Address",
-  "Supply",
 ] as const;
 
 export const CMC_COLUMNS = [

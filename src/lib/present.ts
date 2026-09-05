@@ -16,7 +16,9 @@ export function presentRow(row: ScanRow, settings: Settings): ScanRow {
 
 export function tsvOf(row: ScanRow): string {
   if (row.kind === "dex") {
-    return [row.symbol, row.chain, row.dexId, row.quote, row.contract, row.poolAddress, row.supply].join("\t");
+    // Supply is shown on the row and carried in the JSON, but the sheet has
+    // no column for it, so it is not part of the TSV.
+    return [row.symbol, row.chain, row.dexId, row.quote, row.contract, row.poolAddress].join("\t");
   }
   return [
     row.avatar,
