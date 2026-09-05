@@ -441,7 +441,7 @@ function History({
         {entries.map((e) => (
           <span
             key={e.query}
-            className="group flex h-9 items-center gap-1.5 rounded-full bg-surface pl-1.5 pr-2 shadow-ring transition-colors duration-150 hover:bg-surface-2"
+            className="group relative flex h-9 items-center gap-1.5 rounded-full bg-surface pl-1.5 pr-3 shadow-ring transition-colors duration-150 hover:bg-surface-2"
           >
             <button
               type="button"
@@ -455,15 +455,15 @@ function History({
             <button
               type="button"
               aria-label={`Forget ${e.label}`}
-              // Collapsed to nothing until the chip is hovered - the
-              // negative margin swallows the flex gap the empty box would
-              // otherwise still claim. Touch has no hover, so there it
-              // simply stays open.
+              // Out of the flow entirely, floating over the chip's own right
+              // edge. Growing it inside the row re-wrapped the line and
+              // re-centred every chip - including this one, which then slid
+              // out from under the cursor, dropped the hover, shrank back,
+              // and started over.
               className={cn(
-                "flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full",
-                "text-faint transition-all duration-150 hover:text-fg",
-                "sm:-ml-1.5 sm:w-0 sm:opacity-0",
-                "sm:group-hover:ml-0 sm:group-hover:w-4 sm:group-hover:opacity-100",
+                "absolute right-1 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center",
+                "rounded-full bg-surface-2 text-faint shadow-ring transition-opacity duration-150",
+                "hover:text-fg sm:opacity-0 sm:group-hover:opacity-100",
               )}
               onClick={() => onForget(e)}
             >
