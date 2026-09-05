@@ -28,24 +28,18 @@ function icon(name, size, width) {
     return svg;
 }
 
-// the extension mark, same shape as the toolbar icon
+// The app's mark - the same blade the web header draws, bare rather than on
+// the icon's rounded ground: the popup is already dark, so a ground behind
+// it would only be a square nobody can see the edges of.
 function mark() {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('viewBox', '0 0 128 128');
-    svg.setAttribute('width', '28');
-    svg.setAttribute('height', '28');
+    svg.setAttribute('width', '26');
+    svg.setAttribute('height', '26');
     svg.innerHTML =
-        '<circle cx="64" cy="64" r="64" fill="#f4f4f5"/>'
-        + '<g fill="#0a0a0a">'
-        + '<rect x="18" y="34" width="15" height="60" rx="3"/>'
-        + '<rect x="49" y="34" width="15" height="60" rx="3"/>'
-        + '<polygon points="33,34 48,34 64,94 49,94"/>'
-        + '<rect x="72" y="34" width="38" height="15" rx="4"/>'
-        + '<rect x="72" y="56.5" width="38" height="15" rx="4"/>'
-        + '<rect x="72" y="79" width="38" height="15" rx="4"/>'
-        + '<rect x="72" y="34" width="15" height="37.5" rx="4"/>'
-        + '<rect x="95" y="56.5" width="15" height="37.5" rx="4"/>'
-        + '</g>';
+        '<path fill="#f5f5f7" stroke="#f5f5f7" stroke-width="1.5" '
+        + 'stroke-linejoin="round" d="M103.6 24.4 L82 64 L103.6 103.6 L64 82 '
+        + 'L24.4 103.6 L46 64 L24.4 24.4 L64 46 Z"/>';
     return svg;
 }
 
