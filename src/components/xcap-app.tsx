@@ -353,7 +353,11 @@ function ScanningDialog({ query, source }: { query: string; source: Source }) {
       aria-modal="true"
       aria-busy="true"
       aria-label="Scanning"
-      className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-bg/80 backdrop-blur-sm"
+      // Frosted rather than dimmed: a heavy blur with the colour left in, so
+      // the results behind stay recognisable as shapes without competing with
+      // the card. The tint is light because blur, not darkness, is what
+      // separates the two layers.
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-bg/50 backdrop-blur-2xl backdrop-saturate-150"
     >
       <div className="enter flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface px-6 py-8 text-center shadow-composer">
         <CometSpinner size={30} thickness={3} className="text-fg" />
