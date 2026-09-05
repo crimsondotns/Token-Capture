@@ -1,7 +1,8 @@
-import { Check, Copy, Link2, Search, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Link2, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { columnsOf, isCmc, jsonOf, matchQuery, presentRow, tsvOf } from "@/lib/present";
+import { columnsOf, isCmc, jsonOf, presentRow, tsvOf } from "@/lib/present";
 import type { ScanOk, ScanRow, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -17,45 +18,6 @@ async function writeClipboard(text: string) {
     document.execCommand("copy");
     ta.remove();
   }
-}
-
-function CopyIcon({
-  getText,
-  title = "Copy",
-  compact,
-}: {
-  getText: () => string;
-  title?: string;
-  compact?: boolean;
-}) {
-  const [state, setState] = useState<"idle" | "ok" | "err">("idle");
-  useEffect(() => {
-    if (state === "idle") return;
-    const t = window.setTimeout(() => setState("idle"), 1200);
-    return () => window.clearTimeout(t);
-  }, [state]);
-  return (
-    <button
-      type="button"
-      title={title}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
-        compact ? "size-8" : "size-11",
-        state === "ok" && "text-ok",
-      )}
-      onClick={async (e) => {
-        e.stopPropagation();
-        try {
-          await writeClipboard(getText());
-          setState("ok");
-        } catch {
-          setState("err");
-        }
-      }}
-    >
-      {state === "ok" ? <Check size={compact ? 14 : 16} /> : <Copy size={compact ? 14 : 16} />}
-    </button>
-  );
 }
 
 function Avatar({ src, symbol }: { src?: string; symbol: string }) {
@@ -101,15 +63,33 @@ function Field({
     <div className="flex items-start gap-2 py-1">
       <span className="w-16 shrink-0 pt-0.5 text-xs text-muted">{label}</span>
       {value ? (
-        // The values are addresses read character by character, so they get
-        // the larger size and the brighter of the two greys for the label.
-        <code className="min-w-0 flex-1 break-all font-mono text-sm leading-relaxed text-fg">{value}</code>
+        // The value is the button: an address is what the eye goes to and
+        // what the hand wants to click, so a separate icon beside it was one
+        // more target for the same job.
+        <button
+          type="button"
+          title={`Copy ${label}`}
+          className="min-w-0 flex-1 cursor-pointer break-all text-left font-mono text-sm leading-relaxed text-fg transition-colors duration-150 hover:text-ok"
+          onClick={() => copyValue_(label, copyValue ?? value)}
+        >
+          {value}
+        </button>
       ) : (
         <span className="min-w-0 flex-1 text-xs text-faint">{hint}</span>
       )}
-      {value ? <CopyIcon compact getText={() => copyValue ?? value} title={`Copy ${label}`} /> : null}
     </div>
   );
+}
+
+// One place decides what a copy looks like from the outside: the text lands
+// on the clipboard and the toast says so.
+async function copyValue_(label: string, text: string) {
+  try {
+    await writeClipboard(text);
+    toast.success("Copied", { description: label });
+  } catch {
+    toast.error(`Could not copy ${label}`);
+  }
 }
 
 function DexEmbed({ chain, pool }: { chain: string; pool: string }) {
@@ -144,18 +124,13 @@ export function Results({
   onClear: () => void;
   onOpenSheet: (text: string) => void;
 }) {
-  const [query, setQuery] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
 
-  const presented = useMemo(
+  const rows = useMemo(
     () => result.rows.map((row) => presentRow(row, settings)),
     [result.rows, settings],
   );
-  const rows = useMemo(
-    () => presented.filter((row) => matchQuery(query, row)),
-    [presented, query],
-  );
-  const columns = columnsOf(presented);
+  const columns = columnsOf(rows);
   const embed = result.rows.find((r): r is Extract<ScanRow, { kind: "dex" }> => r.kind === "dex");
 
   async function copy(label: string, text: string) {
@@ -169,57 +144,26 @@ export function Results({
 
   return (
     <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4">
-      <div className="flex items-baseline gap-2 px-1 pb-3 pt-4">
-        <h2 className="text-lg font-medium tracking-tight text-fg">
-          {result.source === "cmc" ? "Tokens" : "Pools"}
-        </h2>
-        <span className="tabular-nums text-sm text-muted">{rows.length}</span>
-        <span className="ml-auto truncate text-sm text-faint">{result.title}</span>
-      </div>
-
-      <div className="mb-3 flex h-11 items-center gap-2 rounded-full bg-surface px-3 shadow-ring">
-        <Search size={16} className="shrink-0 text-faint" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter — sol, chain:solana, sym:btc"
-          spellCheck={false}
-          className="h-11 min-w-0 flex-1 bg-transparent font-sans text-sm text-fg outline-none placeholder:text-faint"
-        />
-        {query ? (
-          <>
-            <span className="tabular-nums text-xs text-faint">
-              {rows.length}/{presented.length}
-            </span>
-            <button
-              type="button"
-              className="flex size-8 items-center justify-center rounded-full text-muted hover:text-fg"
-              onClick={() => setQuery("")}
-              aria-label="Clear filter"
-            >
-              <X size={14} />
-            </button>
-          </>
-        ) : null}
-      </div>
-
       {embed ? <DexEmbed chain={embed.chain} pool={embed.poolAddress} /> : null}
 
-      <div className="min-h-0 flex-1 overflow-auto pb-2">
+      <div className="min-h-0 flex-1 overflow-auto pb-2 pt-4">
         {rows.length === 0 ? (
-          <p className="px-2 py-16 text-center text-sm text-muted">
-            Nothing matches that filter.
-          </p>
+          <p className="px-2 py-16 text-center text-sm text-muted">Nothing to show.</p>
         ) : (
           <ul className="space-y-2">
             {rows.map((row, i) => (
               <li
                 key={rowKey(row, i)}
-                className="rounded-2xl bg-surface px-3 py-3 shadow-ring"
+                className="rounded-2xl bg-surface px-3 py-3"
               >
                 {isCmc(row) ? (
                   <>
-                    <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      title="Copy this row as TSV"
+                      className="flex w-full items-center gap-3 text-left"
+                      onClick={() => copyValue_("row", tsvOf(row))}
+                    >
                       <Avatar src={row.avatar} symbol={row.symbol} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-fg">
@@ -231,15 +175,19 @@ export function Results({
                           {row.id != null ? ` · #${row.id}` : ""}
                         </div>
                       </div>
-                      <CopyIcon getText={() => tsvOf(row)} title="Copy this row as TSV" />
-                    </div>
+                    </button>
                     <div className="mt-2 border-t border-border pt-1">
                       <Field label="Contract" value={row.tokenAddress} />
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      title="Copy this row as TSV"
+                      className="flex w-full items-center gap-3 text-left"
+                      onClick={() => copyValue_("row", tsvOf(row))}
+                    >
                       <Avatar src={row.imageUrl} symbol={row.symbol} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-fg">
@@ -249,8 +197,7 @@ export function Results({
                           {row.dexId} · {row.chain}
                         </div>
                       </div>
-                      <CopyIcon getText={() => tsvOf(row)} title="Copy this row as TSV" />
-                    </div>
+                    </button>
                     <div className="mt-2 border-t border-border pt-1">
                       <Field
                         label="DexID"

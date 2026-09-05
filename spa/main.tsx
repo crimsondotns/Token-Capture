@@ -11,7 +11,7 @@ createRoot(root).render(
     <XCapApp />
     <Toaster
       theme="dark"
-      position="bottom-center"
+      position="top-center"
       toastOptions={{
         className: "font-sans text-sm border-0 bg-surface text-fg rounded-2xl shadow-panel",
       }}
