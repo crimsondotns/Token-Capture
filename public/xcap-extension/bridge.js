@@ -5,7 +5,7 @@
  * cross on an attribute and requests cross as events.
  */
 const DEFAULTS = {
-    sheetUrl: 'https://docs.google.com/spreadsheets/d/1Yk2vMgJEQEidZ0D7EjQMZcRDXwaMghtTQhEMvsOCpsE/edit?gid=808635128#gid=808635128',
+    sheetUrl: '',
     sheetSameTab: false,
     deriveAvatar: true,
     nativeAsUcid: true

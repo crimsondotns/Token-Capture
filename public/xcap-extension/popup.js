@@ -59,8 +59,7 @@ document.querySelectorAll('[data-check]').forEach(box => {
 
 // popup.js also runs under tools/render.js, which has no chrome.* at all
 if (typeof chrome === 'undefined' || !chrome.storage) {
-    document.getElementById('sheetUrl').value =
-        'https://docs.google.com/spreadsheets/d/1Yk2vMgJEQEidZ0D7EjQMZcRDXwaMghtTQhEMvsOCpsE/edit';
+    document.getElementById('sheetUrl').value = '';
     document.getElementById('deriveAvatar').checked = true;
     document.getElementById('nativeAsUcid').checked = true;
 } else {
@@ -69,7 +68,7 @@ if (typeof chrome === 'undefined' || !chrome.storage) {
 
 function start() {
     const DEFAULTS = {
-        sheetUrl: 'https://docs.google.com/spreadsheets/d/1Yk2vMgJEQEidZ0D7EjQMZcRDXwaMghtTQhEMvsOCpsE/edit?gid=808635128#gid=808635128',
+        sheetUrl: '',
         sheetSameTab: false,
         deriveAvatar: true,
         nativeAsUcid: true

@@ -60,8 +60,9 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  sheetUrl:
-    "https://docs.google.com/spreadsheets/d/1Yk2vMgJEQEidZ0D7EjQMZcRDXwaMghtTQhEMvsOCpsE/edit?gid=808635128#gid=808635128",
+  // No sheet by default: the destination is the operator's own, and one
+  // baked in here would ship in every build and every extension zip.
+  sheetUrl: "",
   sheetSameTab: false,
   deriveAvatar: true,
   nativeAsUcid: true,

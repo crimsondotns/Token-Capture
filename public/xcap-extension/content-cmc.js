@@ -13,7 +13,7 @@ var __XCAP_EXTENSION = true;
     // ─────────────────────────── CONFIG ───────────────────────────
     const CONFIG = {
         // Where the "Copy + Open Sheet" button goes.
-        sheetUrl: 'https://docs.google.com/spreadsheets/d/1Yk2vMgJEQEidZ0D7EjQMZcRDXwaMghtTQhEMvsOCpsE/edit?gid=808635128#gid=808635128',
+        sheetUrl: '',
 
         // Open the sheet in this tab (true) or a new one (false).
         sheetSameTab: false,
