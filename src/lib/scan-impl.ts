@@ -148,39 +148,59 @@ function parseCmcTarget(query: string): { slug?: string; id?: string } {
 }
 
 function formatDexId(p: Record<string, unknown>): string {
-  const id = str(p.dexId);
-  const labels = Array.isArray(p.labels) ? p.labels.map(str).filter(Boolean) : [];
-  const version = labels.find((l) => /^v\d/i.test(l));
-  if (version && id && !id.toLowerCase().replace(/\s+/g, "").includes(version.toLowerCase())) {
-    return `${id}${version}`;
-  }
-  return id;
+  return ioChartDexId(p);
 }
 
-function chartDexHints(p: Record<string, unknown>): string[] {
-  const formatted = formatDexId(p);
-  const raw = str(p.dexId);
+/** io.dexscreener chart adapter — /dex/chart/amm/v3/{this}/bars/... */
+const UNISWAP_V3_ADAPTERS = new Set([
+  "uniswap",
+  "ramses",
+  "nile",
+  "pharaoh",
+  "cleopatra",
+  "aerodrome",
+  "velodrome",
+  "thruster",
+  "camelot",
+  "lynex",
+  "swapx",
+  "alienbase",
+  "baseswap",
+  "quickswap",
+  "sushiswap",
+  "sushi",
+  "spookyswap",
+  "equalizer",
+  "thena",
+  "fusionx",
+  "agni",
+  "thick",
+  "kim",
+  "hercules",
+  "sparkdex",
+  "kodiak",
+  "superswap",
+  "dackieswap",
+  "swapr",
+  "zyberswap",
+  "horizon",
+  "swapbased",
+]);
+
+function ioChartDexId(p: Record<string, unknown>): string {
+  const raw = str(p.dexId)
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
   const labels = Array.isArray(p.labels) ? p.labels.map(str).map((s) => s.toLowerCase()) : [];
-  const v4 = labels.some((l) => l === "v4" || l.includes("v4"));
-  return [formatted, raw, v4 ? "uniswapv4" : "", "uniswapv4", "uniswap"].filter(Boolean);
-}
-
-async function chartDexExists(dexId: string, chain: string, pool: string): Promise<boolean> {
-  const path = `/dex/chart/amm/v3/${encodeURIComponent(dexId)}/bars/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}?res=1440&cb=2`;
-  try {
-    const body = await fetchText(`https://r.jina.ai/http://io.dexscreener.com${path}`, 8000);
-    return Boolean(body && body.length > 250 && !/cannot get/i.test(body));
-  } catch {
-    return false;
+  const base = raw.replace(/v[2-4]$/i, "");
+  const isV4 = labels.includes("v4") || raw.includes("v4") || base === "uniswapv4";
+  if (isV4 && (base === "uniswap" || base === "uniswapv4" || UNISWAP_V3_ADAPTERS.has(base))) {
+    return "uniswapv4";
   }
-}
-
-async function resolveChartDexId(chain: string, pool: string, hints: string[]): Promise<string> {
-  const candidates = [...new Set(hints.map((s) => s.trim().toLowerCase()).filter(Boolean))];
-  for (const id of candidates) {
-    if (await chartDexExists(id, chain, pool)) return id;
+  if (base === "uniswap" || raw.startsWith("uniswap") || UNISWAP_V3_ADAPTERS.has(base) || UNISWAP_V3_ADAPTERS.has(raw)) {
+    return "uniswap";
   }
-  return hints[0] || "";
+  return base || raw;
 }
 
 function dexRowFromPair(p: Record<string, unknown>): DexRow {
@@ -443,12 +463,6 @@ async function scanDex(query: string): Promise<ScanResult> {
         row.dexId = target.dexId;
         if (target.quote) row.quote = target.quote;
       }
-    }
-  } else if (target && rows[0]) {
-    const resolved = await resolveChartDexId(target.chain, target.pair, chartDexHints(pairs[0] ?? {}));
-    if (resolved) {
-      rows[0].dexId = resolved;
-      target.dexId = resolved;
     }
   }
   await fillSupply(rows, pairs);
