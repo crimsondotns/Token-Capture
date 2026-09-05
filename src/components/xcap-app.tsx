@@ -196,7 +196,8 @@ export function XCapApp() {
         </Overlay>
       ) : null}
 
-      <main className="mx-auto flex w-full min-h-0 flex-1 flex-col">
+      {/* The composer floats over this, so the last row has to clear it. */}
+      <main className="mx-auto flex w-full min-h-0 flex-1 flex-col pb-40">
         {scanning && !result ? (
           <IdleFrame>
             <LoaderCircle size={22} className="animate-spin text-muted" />
@@ -252,9 +253,12 @@ export function XCapApp() {
         )}
       </main>
 
-      <div className="shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Floating: fixed to the viewport rather than sitting at the end of the
+          column, so it stays reachable while the results scroll under it. The
+          gradient keeps text from colliding with it on the way past. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10 bg-gradient-to-t from-bg via-bg/90 to-transparent">
         <form
-          className="mx-auto w-full max-w-3xl px-4"
+          className="pointer-events-auto mx-auto w-full max-w-3xl px-4"
           onSubmit={(e) => {
             e.preventDefault();
             void scan();
