@@ -637,7 +637,14 @@ type CmcPlatform = {
   platformId?: unknown;
 };
 
-async function scanCmcPage(query: string, slug: string): Promise<ScanOk | null> {
+/**
+ * `unreachable` is the difference between "CoinMarketCap says there is no
+ * such coin" and "nothing could reach CoinMarketCap at all" - two failures
+ * that want completely different things from the person reading them.
+ */
+type PageScan = { found: ScanOk } | { unreachable: true } | null;
+
+async function scanCmcPage(query: string, slug: string): Promise<PageScan> {
   if (!slug) return null;
   try {
     const html = await fetchText(
@@ -647,18 +654,21 @@ async function scanCmcPage(query: string, slug: string): Promise<ScanOk | null> 
       9000,
     );
     const rows = rowsFromCmcPage(html, slug);
+    // The page was read and simply holds no contracts - a real answer.
     if (!rows.length) return null;
     const first = rows[0];
     return {
-      ok: true,
-      source: "cmc",
-      query,
-      title: `${first.symbol || slug} · #${first.id ?? "—"}`,
-      subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
-      rows,
+      found: {
+        ok: true,
+        source: "cmc",
+        query,
+        title: `${first.symbol || slug} · #${first.id ?? "—"}`,
+        subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
+        rows,
+      },
     };
   } catch {
-    return null;
+    return { unreachable: true };
   }
 }
 
@@ -668,10 +678,12 @@ async function scanCmc(query: string): Promise<ScanResult> {
     ? `id=${encodeURIComponent(target.id)}`
     : `slug=${encodeURIComponent(target.slug || query)}`;
   let data: Record<string, unknown> | null = null;
+  let apiReached = false;
   try {
     const body = asRecord(
       await fetchJson(`https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail?${param}`),
     );
+    apiReached = true;
     data = asRecord(body?.data);
   } catch {
     data = null;
@@ -681,8 +693,17 @@ async function scanCmc(query: string): Promise<ScanResult> {
     // recognise, so fall back to what the extension reads: the coin page's
     // own source, where the contracts are already rendered.
     const fromPage = await scanCmcPage(query, target.slug || String(target.id || query));
-    if (fromPage) return fromPage;
+    if (fromPage && "found" in fromPage) return fromPage.found;
     const hint = target.slug || target.id || query;
+    // Nothing answered: not the API, and not the page through any proxy. The
+    // coin may well exist - saying it does not would send someone off
+    // correcting a slug that was right all along.
+    if (!apiReached && fromPage?.unreachable) {
+      throw new Error(
+        `Could not reach CoinMarketCap for “${hint}” — the API refuses this origin and every proxy was blocked or timed out. ` +
+          `DexScreener still works; for CoinMarketCap, run XCap somewhere with a server (the Vercel setup in the README) or capture the page with the extension.`,
+      );
+    }
     throw new Error(
       `No CoinMarketCap coin for “${hint}”. Use a /currencies/… URL or a slug such as bitcoin, tether, solana.`,
     );
