@@ -129,11 +129,16 @@ function DexEmbed({ chain, pool }: { chain: string; pool: string }) {
 export function Results({
   result,
   settings,
+  extensionVersion,
   onClear,
   onOpenSheet,
 }: {
   result: ScanOk;
   settings: Settings;
+  // Version reported by the capture extension in the chart frame, or null
+  // when nothing has spoken up: the difference between "still loading" and
+  // "no extension is listening".
+  extensionVersion?: string | null;
   onClear: () => void;
   onOpenSheet: (text: string) => void;
 }) {
@@ -248,7 +253,11 @@ export function Results({
                       <Field
                         label="DexID"
                         value={row.dexId}
-                        hint="from the chart worker…"
+                        hint={
+                          extensionVersion
+                            ? `from the chart worker… (XCap ${extensionVersion})`
+                            : "install the XCap extension to capture this"
+                        }
                       />
                       <Field label="Contract" value={row.contract} />
                       <Field label="Pool" value={row.poolAddress} />

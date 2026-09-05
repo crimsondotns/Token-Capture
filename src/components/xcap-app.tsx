@@ -39,6 +39,8 @@ export function XCapApp() {
   const [result, setResult] = useState<ScanOk | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  // What the DexScreener frame reports about the capture extension, if any.
+  const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -49,13 +51,15 @@ export function XCapApp() {
       const data = ev.data as {
         source?: string;
         type?: string;
+        version?: string;
         dexId?: string;
         chain?: string;
         pool?: string;
         quote?: string;
         cs?: string;
       } | null;
-      if (!data || data.source !== "xcap" || data.type !== "chart") return;
+      if (!data || data.source !== "xcap") return;
+      if (data.type !== "chart" && data.type !== "hello") return;
       let host = "";
       try {
         host = new URL(ev.origin).hostname;
@@ -63,6 +67,9 @@ export function XCapApp() {
         return;
       }
       if (host !== "dexscreener.com" && !host.endsWith(".dexscreener.com")) return;
+      // Either message proves a content script is running in the frame.
+      setExtensionVersion((prev) => data.version || prev || "unknown");
+      if (data.type !== "chart") return;
       setResult((prev) => (prev ? applyChartHit(prev, data) : prev));
     }
     window.addEventListener("message", onMessage);
@@ -199,6 +206,7 @@ export function XCapApp() {
           <Results
             result={result}
             settings={settings}
+            extensionVersion={extensionVersion}
             onClear={() => {
               setResult(null);
               setError(null);

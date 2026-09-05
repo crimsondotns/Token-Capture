@@ -15,6 +15,12 @@ function publish(config) {
     const write = () => {
         try {
             document.documentElement.setAttribute('data-xcap-config', JSON.stringify(config));
+            // The MAIN world cannot reach chrome.runtime, but the page it is
+            // embedded in needs to know which build is answering.
+            try {
+                document.documentElement.setAttribute(
+                    'data-xcap-version', chrome.runtime.getManifest().version);
+            } catch (e) { /* manifest unavailable */ }
             document.dispatchEvent(new Event('xcap:config'));
         } catch (e) { /* page torn down mid-write */ }
     };

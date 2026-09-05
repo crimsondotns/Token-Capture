@@ -121,6 +121,19 @@ var __XCAP_EXTENSION = true;
     let announce = false;
     const IN_FRAME = window !== window.top;
 
+    // The embedding page has no way to see this script otherwise: a stale
+    // build simply stays silent, which reads exactly like a broken pool.
+    function announceSelf() {
+        if (!IN_FRAME) return;
+        let version = '';
+        try {
+            version = document.documentElement.getAttribute('data-xcap-version') || '';
+        } catch (e) { /* torn down */ }
+        try {
+            window.parent.postMessage({ source: 'xcap', type: 'hello', version: version }, '*');
+        } catch (e) { /* ignore */ }
+    }
+
     function publish(h) {
         if (!h) return;
         const payload = {
@@ -1216,6 +1229,7 @@ var __XCAP_EXTENSION = true;
     // DOM events, the only channel the two worlds share.
     const onStoredConfig = () => {
         applyStoredConfig();
+        announceSelf();   // the version attribute lands with the config
         if (document.getElementById('__chart_panel')) render(false);
     };
     function requestScan() {
@@ -1288,6 +1302,7 @@ var __XCAP_EXTENSION = true;
 
     // Installed: do not wrap fetch or open the panel until Scan.
     // Pasted into the console: arm immediately so the paste is visible.
+    announceSelf();
     if (IN_FRAME) requestScan();
     else if (!AUTO) requestScan();
     else console.log('%c[chart] ready%c  press Scan in the toolbar popup'
