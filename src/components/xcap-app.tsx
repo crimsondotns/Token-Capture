@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
+import { applyChartHit } from "@/lib/scan-impl";
 import { cn } from "@/lib/utils";
 
 const SAMPLES: { source: Source; label: string; query: string }[] = [
@@ -41,6 +42,31 @@ export function XCapApp() {
 
   useEffect(() => {
     setSettings(loadSettings());
+  }, []);
+
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      const data = ev.data as {
+        source?: string;
+        type?: string;
+        dexId?: string;
+        chain?: string;
+        pool?: string;
+        quote?: string;
+        cs?: string;
+      } | null;
+      if (!data || data.source !== "xcap" || data.type !== "chart") return;
+      let host = "";
+      try {
+        host = new URL(ev.origin).hostname;
+      } catch {
+        return;
+      }
+      if (host !== "dexscreener.com" && !host.endsWith(".dexscreener.com")) return;
+      setResult((prev) => (prev ? applyChartHit(prev, data) : prev));
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, []);
 
   function updateSettings(patch: Partial<Settings>) {

@@ -89,17 +89,39 @@ function Field({
   label,
   value,
   copyValue,
+  hint,
 }: {
   label: string;
   value: string;
   copyValue?: string;
+  hint?: string;
 }) {
-  if (!value) return null;
+  if (!value && !hint) return null;
   return (
     <div className="flex items-start gap-2 py-1">
       <span className="w-16 shrink-0 pt-0.5 text-xs text-faint">{label}</span>
-      <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-fg">{value}</code>
-      <CopyIcon compact getText={() => copyValue ?? value} title={`Copy ${label}`} />
+      {value ? (
+        <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-fg">{value}</code>
+      ) : (
+        <span className="min-w-0 flex-1 text-xs text-faint">{hint}</span>
+      )}
+      {value ? <CopyIcon compact getText={() => copyValue ?? value} title={`Copy ${label}`} /> : null}
+    </div>
+  );
+}
+
+function DexEmbed({ chain, pool }: { chain: string; pool: string }) {
+  const src =
+    `https://dexscreener.com/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}` +
+    "?embed=1&loadChartSettings=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15";
+  return (
+    <div className="relative mb-3 w-full overflow-hidden rounded-2xl bg-black pt-[48%] shadow-ring">
+      <iframe
+        title="DexScreener"
+        src={src}
+        className="absolute inset-0 h-full w-full border-0"
+        allow="clipboard-write; fullscreen"
+      />
     </div>
   );
 }
@@ -127,6 +149,7 @@ export function Results({
     [presented, query],
   );
   const columns = columnsOf(presented);
+  const embed = result.rows.find((r): r is Extract<ScanRow, { kind: "dex" }> => r.kind === "dex");
 
   async function copy(label: string, text: string) {
     await writeClipboard(text);
@@ -172,6 +195,8 @@ export function Results({
           </>
         ) : null}
       </div>
+
+      {embed ? <DexEmbed chain={embed.chain} pool={embed.poolAddress} /> : null}
 
       <div className="min-h-0 flex-1 overflow-auto pb-2">
         {rows.length === 0 ? (
@@ -220,7 +245,11 @@ export function Results({
                       <CopyIcon getText={() => tsvOf(row)} title="Copy this row as TSV" />
                     </div>
                     <div className="mt-2 border-t border-border pt-1">
-                      <Field label="DexID" value={row.dexId} />
+                      <Field
+                        label="DexID"
+                        value={row.dexId}
+                        hint="from the chart worker…"
+                      />
                       <Field label="Contract" value={row.contract} />
                       <Field label="Pool" value={row.poolAddress} />
                       <Field label="Quote" value={row.quote} />

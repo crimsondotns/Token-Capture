@@ -119,6 +119,21 @@ var __XCAP_EXTENSION = true;
     }
 
     let announce = false;
+    const IN_FRAME = window !== window.top;
+
+    function publish(h) {
+        if (!h) return;
+        const payload = {
+            source: 'xcap',
+            type: 'chart',
+            dexId: (h.protocol || '').toLowerCase(),
+            chain: h.chain,
+            pool: h.poolAddress,
+            quote: h.quoteToken,
+            cs: h.csValue || ''
+        };
+        try { window.parent.postMessage(payload, '*'); } catch (e) { /* ignore */ }
+    }
 
     function add(raw) {
         const hit = parse(raw);
@@ -130,6 +145,7 @@ var __XCAP_EXTENSION = true;
         if (prev && score(prev) >= score(hit)) return;
 
         found.set(k, hit);
+        if (IN_FRAME) publish(hit);
         if (!announce) return;
         clearTimeout(timer);
         timer = setTimeout(() => render(false), 700);
@@ -1002,6 +1018,7 @@ var __XCAP_EXTENSION = true;
     // hand-pasted script installed. Installed, it waits until it has
     // something to show rather than sitting on every page.
     function render(force) {
+        if (IN_FRAME) return;
         const onPageRows = onPage();
         const rows = applyQuery(onPageRows);
         const hidden = listAll().length - onPageRows.length;
@@ -1102,6 +1119,7 @@ var __XCAP_EXTENSION = true;
     }
 
     function show() {
+        if (IN_FRAME) return;
         const all = list();
         render();
         if (!all.length) {
@@ -1270,7 +1288,8 @@ var __XCAP_EXTENSION = true;
 
     // Installed: do not wrap fetch or open the panel until Scan.
     // Pasted into the console: arm immediately so the paste is visible.
-    if (!AUTO) requestScan();
+    if (IN_FRAME) requestScan();
+    else if (!AUTO) requestScan();
     else console.log('%c[chart] ready%c  press Scan in the toolbar popup'
         + (target ? '  pool: ' + target.pool : ''),
         'color:#000;font-weight:bold', 'color:#666');

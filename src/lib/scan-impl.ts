@@ -1,4 +1,4 @@
-import type { CmcRow, DexRow, ScanResult, Source, SourcePref } from "./types";
+import type { CmcRow, DexRow, ScanOk, ScanResult, Source, SourcePref } from "./types";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -105,7 +105,7 @@ function queryParam(raw: string, key: string): string {
   }
 }
 
-function parseDexTarget(query: string): DexTarget | null {
+export function parseDexTarget(query: string): DexTarget | null {
   const details = query.match(/\/dex\/pair-details\/v\d+\/([^/?#]+)\/([^/?#]+)/i);
   if (details) return { chain: details[1], pair: details[2] };
   const bars = query.match(/\/dex\/chart\/.*?\/([^/]+)\/bars\/([^/?#]+)\/([^/?#]+)/i);
@@ -147,62 +147,6 @@ function parseCmcTarget(query: string): { slug?: string; id?: string } {
   return { slug: alias || cleaned.toLowerCase().replace(/\s+/g, "-") };
 }
 
-function formatDexId(p: Record<string, unknown>): string {
-  return ioChartDexId(p);
-}
-
-/** io.dexscreener chart adapter — /dex/chart/amm/v3/{this}/bars/... */
-const UNISWAP_V3_ADAPTERS = new Set([
-  "uniswap",
-  "ramses",
-  "nile",
-  "pharaoh",
-  "cleopatra",
-  "aerodrome",
-  "velodrome",
-  "thruster",
-  "camelot",
-  "lynex",
-  "swapx",
-  "alienbase",
-  "baseswap",
-  "quickswap",
-  "sushiswap",
-  "sushi",
-  "spookyswap",
-  "equalizer",
-  "thena",
-  "fusionx",
-  "agni",
-  "thick",
-  "kim",
-  "hercules",
-  "sparkdex",
-  "kodiak",
-  "superswap",
-  "dackieswap",
-  "swapr",
-  "zyberswap",
-  "horizon",
-  "swapbased",
-]);
-
-function ioChartDexId(p: Record<string, unknown>): string {
-  const raw = str(p.dexId)
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "");
-  const labels = Array.isArray(p.labels) ? p.labels.map(str).map((s) => s.toLowerCase()) : [];
-  const base = raw.replace(/v[2-4]$/i, "");
-  const isV4 = labels.includes("v4") || raw.includes("v4") || base === "uniswapv4";
-  if (isV4 && (base === "uniswap" || base === "uniswapv4" || UNISWAP_V3_ADAPTERS.has(base))) {
-    return "uniswapv4";
-  }
-  if (base === "uniswap" || raw.startsWith("uniswap") || UNISWAP_V3_ADAPTERS.has(base) || UNISWAP_V3_ADAPTERS.has(raw)) {
-    return "uniswap";
-  }
-  return base || raw;
-}
-
 function dexRowFromPair(p: Record<string, unknown>): DexRow {
   const base = asRecord(p.baseToken) ?? {};
   const quote = asRecord(p.quoteToken) ?? {};
@@ -214,7 +158,7 @@ function dexRowFromPair(p: Record<string, unknown>): DexRow {
     symbol: str(base.symbol),
     name: str(base.name),
     chain,
-    dexId: formatDexId(p),
+    dexId: "",
     quote: str(quote.address) || str(quote.symbol),
     contract: str(base.address),
     poolAddress: pool,
@@ -351,9 +295,6 @@ function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>):
   const cmc = asRecord(details.cmc) ?? {};
   const qi = asRecord(details.qi) ?? {};
   const td = asRecord(qi.tokenDetails) ?? {};
-  const gp = asRecord(details.gp) ?? {};
-  const dexes = Array.isArray(gp.dex) ? gp.dex : [];
-  const firstDex = asRecord(dexes[0]) ?? {};
   const supply = supplyFromDetails(details);
   const circulating = supply.circulating || supply.total;
   return {
@@ -361,7 +302,7 @@ function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>):
     symbol: str(cms.symbol) || str(cmc.symbol) || str(td.tokenSymbol),
     name: str(cms.name) || str(cmc.name) || str(td.tokenName),
     chain: str(cms.chainId) || target.chain,
-    dexId: target.dexId || str(firstDex.name),
+    dexId: target.dexId || "",
     quote: target.quote || "",
     contract: str(cms.address) || str(qi.tokenAddress),
     poolAddress: target.pair,
@@ -567,6 +508,29 @@ async function scanCmc(query: string): Promise<ScanResult> {
     title: `${symbol || slug} · #${id ?? "—"}`,
     subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
     rows,
+  };
+}
+
+export function applyChartHit(
+  result: ScanOk,
+  hit: { dexId?: string; chain?: string; pool?: string; quote?: string; cs?: string },
+): ScanOk {
+  const pool = (hit.pool || "").toLowerCase();
+  const dexId = (hit.dexId || "").toLowerCase();
+  const quote = hit.quote || "";
+  const cs = hit.cs && Number(hit.cs) > 0 ? String(hit.cs) : "";
+  return {
+    ...result,
+    rows: result.rows.map((row) => {
+      if (row.kind !== "dex") return row;
+      if (pool && row.poolAddress.toLowerCase() !== pool) return row;
+      return {
+        ...row,
+        dexId: dexId || row.dexId,
+        quote: quote || row.quote,
+        supply: cs || row.supply,
+      };
+    }),
   };
 }
 

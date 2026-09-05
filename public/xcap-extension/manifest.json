@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "XCap",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Capture DexScreener pools and CoinMarketCap contracts. Nothing runs until you press Scan.",
   "permissions": [
     "storage",
@@ -34,7 +34,8 @@
       "js": [
         "bridge.js"
       ],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     },
     {
       "matches": [
@@ -44,7 +45,8 @@
         "content-dexscreener.js"
       ],
       "run_at": "document_start",
-      "world": "MAIN"
+      "world": "MAIN",
+      "all_frames": true
     },
     {
       "matches": [
