@@ -15,6 +15,13 @@ import { Results } from "@/components/results";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import {
+  clearHistory,
+  forgetScan,
+  type HistoryEntry,
+  loadHistory,
+  rememberScan,
+} from "@/lib/history";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
@@ -45,9 +52,11 @@ export function XCapApp() {
   const [hasScanned, setHasScanned] = useState(false);
   // What the DexScreener frame reports about the capture extension, if any.
   const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     setSettings(loadSettings());
+    setHistory(loadHistory());
   }, []);
 
   useEffect(() => {
@@ -150,6 +159,8 @@ export function XCapApp() {
         return;
       }
       chime(true);
+      // Recorded only for a scan that found something: a typo is not history.
+      setHistory(rememberScan(q, source, out));
       // Only once rows came back: a failed or empty scan leaves the query in
       // place to be corrected rather than retyped.
       setQuery("");
@@ -270,18 +281,30 @@ export function XCapApp() {
               </p>
               <p className="text-sm text-faint">กด Scan เมื่อพร้อม — ไม่สแกนอัตโนมัติ</p>
             </div>
-            <div className="enter enter-3 flex flex-wrap justify-center gap-2 pt-2">
-              {SAMPLES.filter((s) => s.source === source).map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  className="h-11 rounded-full bg-surface px-4 text-sm text-fg shadow-ring transition-colors duration-150 hover:bg-surface-2"
-                  onClick={() => pickSample(s)}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
+            {history.length ? (
+              <History
+                entries={history}
+                onPick={(e) => {
+                  setQuery(e.query);
+                  setSource(e.source);
+                }}
+                onForget={(e) => setHistory(forgetScan(e.query))}
+                onClear={() => setHistory(clearHistory())}
+              />
+            ) : (
+              <div className="enter enter-3 flex flex-wrap justify-center gap-2 pt-2">
+                {SAMPLES.filter((s) => s.source === source).map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    className="h-11 rounded-full bg-surface px-4 text-sm text-fg shadow-ring transition-colors duration-150 hover:bg-surface-2"
+                    onClick={() => pickSample(s)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </IdleFrame>
         ) : (
           <IdleFrame>
@@ -386,6 +409,65 @@ function IdleFrame({ children }: { children: React.ReactNode }) {
 // Modal rather than a line in the results: a scan crosses several hosts and
 // can take seconds, and the page underneath is the previous scan's, which is
 // no longer what the answer will be.
+// What was scanned before, most recent first. Picking one only fills the
+// composer: a scan still has to be asked for, which is the whole posture of
+// this app.
+function History({
+  entries,
+  onPick,
+  onForget,
+  onClear,
+}: {
+  entries: HistoryEntry[];
+  onPick: (entry: HistoryEntry) => void;
+  onForget: (entry: HistoryEntry) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="enter enter-3 w-full max-w-xl pt-2">
+      <div className="mb-2 flex items-baseline gap-2 px-1">
+        <span className="text-xs text-faint">Recent</span>
+        <button
+          type="button"
+          className="ml-auto text-xs text-faint transition-colors duration-150 hover:text-fg"
+          onClick={onClear}
+        >
+          Clear
+        </button>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        {entries.map((e) => (
+          <span
+            key={e.query}
+            className="group flex h-11 items-center rounded-full bg-surface pl-4 pr-1 shadow-ring transition-colors duration-150 hover:bg-surface-2"
+          >
+            <button
+              type="button"
+              title={e.query}
+              className="flex min-w-0 items-center gap-2 text-left"
+              onClick={() => onPick(e)}
+            >
+              <span className="max-w-40 truncate text-sm text-fg">{e.label}</span>
+              {e.detail ? (
+                <span className="max-w-40 truncate text-xs text-faint">{e.detail}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              aria-label={`Forget ${e.label}`}
+              // Visible on touch, where there is no hover to reveal it.
+              className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full text-faint opacity-100 transition-colors duration-150 hover:text-fg sm:opacity-0 sm:group-hover:opacity-100"
+              onClick={() => onForget(e)}
+            >
+              <X size={13} />
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ScanningDialog({
   query,
   source,
