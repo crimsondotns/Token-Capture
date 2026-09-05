@@ -158,7 +158,9 @@ function dexRowFromPair(p: Record<string, unknown>): DexRow {
     symbol: str(base.symbol),
     name: str(base.name),
     chain,
-    dexId: "",
+    // io.dexscreener's own DexID is preferred and fills in later; this is the
+    // public API's answer, kept so the column is not blank when it does not.
+    dexId: str(p.dexId),
     quote: str(quote.address) || str(quote.symbol),
     contract: str(base.address),
     poolAddress: pool,
@@ -343,7 +345,11 @@ function dexRowFromDetails(target: DexTarget, details: Record<string, unknown>):
   };
 }
 
-async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Promise<void> {
+async function fillSupply(
+  rows: DexRow[],
+  pairs: Record<string, unknown>[],
+  pinnedDexId = "",
+): Promise<void> {
   const cap = Math.min(rows.length, 12);
   let cursor = 0;
   const worker = async () => {
@@ -357,8 +363,10 @@ async function fillSupply(rows: DexRow[], pairs: Record<string, unknown>[]): Pro
         const body = await fetchPairDetails(row.chain, row.poolAddress);
         if (body) {
           details = supplyFromDetails(body);
-          // The chart URL, when one was pasted, has already set this.
-          if (!row.dexId) row.dexId = dexIdFromDetails(body);
+          // A pasted chart URL wins; otherwise io.dexscreener's answer
+          // replaces whatever the public API reported.
+          const dexId = dexIdFromDetails(body);
+          if (dexId && (!pinnedDexId || row.dexId !== pinnedDexId)) row.dexId = dexId;
         }
       } catch {
         /* keep fallback */
@@ -439,7 +447,7 @@ async function scanDex(query: string): Promise<ScanResult> {
       }
     }
   }
-  await fillSupply(rows, pairs);
+  await fillSupply(rows, pairs, target?.dexId || "");
 
   if (!rows.length && target) {
     const details = await fetchPairDetails(target.chain, target.pair);
