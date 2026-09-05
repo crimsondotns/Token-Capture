@@ -3,6 +3,8 @@ import {
   Check,
   Download,
   Settings2,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -12,10 +14,11 @@ import { Mark } from "@/components/mark";
 import { Results } from "@/components/results";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import type { ScanOk, ScanResult, Settings, Source } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
-import { playChime, primeChime } from "@/lib/chime";
+import { CHIME_NAMES, type ChimeName, playChime, primeChime } from "@/lib/chime";
 import { applyChartHit, cancelScan } from "@/lib/scan-impl";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +113,13 @@ export function XCapApp() {
     setScanning(false);
   }
 
+  // The settings are read at the moment the sound plays, so changing them
+  // mid-scan takes effect on that scan's own chime.
+  function chime(ok: boolean) {
+    if (!settings.sound) return;
+    playChime(ok, { name: settings.chime, volume: settings.volume });
+  }
+
   async function scan() {
     const q = query.trim();
     if (!q) {
@@ -130,16 +140,16 @@ export function XCapApp() {
       if (!out.ok) {
         setResult(null);
         setError(out.error);
-        if (settings.sound) playChime(false);
+        chime(false);
         return;
       }
       setResult(out);
       if (!out.rows.length) {
         setError("Nothing found for that query.");
-        if (settings.sound) playChime(false);
+        chime(false);
         return;
       }
-      if (settings.sound) playChime(true);
+      chime(true);
       // Only once rows came back: a failed or empty scan leaves the query in
       // place to be corrected rather than retyped.
       setQuery("");
@@ -147,7 +157,7 @@ export function XCapApp() {
       if (scanRun.current !== run) return;
       setResult(null);
       setError(err instanceof Error ? err.message : "Scan failed");
-      if (settings.sound) playChime(false);
+      chime(false);
     } finally {
       if (scanRun.current === run) setScanning(false);
     }
@@ -465,6 +475,88 @@ function Overlay({
   );
 }
 
+// Every control here previews what it changes: a sound described in words is
+// a sound nobody can choose between.
+function SoundSettings({
+  settings,
+  onChange,
+}: {
+  settings: Settings;
+  onChange: (patch: Partial<Settings>) => void;
+}) {
+  function preview(patch: Partial<Settings>) {
+    onChange(patch);
+    const next = { ...settings, ...patch };
+    if (!next.sound) return;
+    primeChime();
+    playChime(true, { name: next.chime, volume: next.volume });
+  }
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <div className="mb-2 flex items-center gap-3">
+        <button
+          type="button"
+          aria-label={settings.sound ? "Mute the chime" : "Unmute the chime"}
+          title={settings.sound ? "Mute" : "Unmute"}
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors duration-150",
+            settings.sound
+              ? "bg-surface-2 text-fg hover:bg-border"
+              : "bg-surface-2 text-faint hover:text-muted",
+          )}
+          onClick={() => {
+            const on = !settings.sound;
+            onChange({ sound: on });
+            if (on) {
+              primeChime();
+              playChime(true, { name: settings.chime, volume: settings.volume });
+            }
+          }}
+        >
+          {settings.sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm text-fg">Chime when a scan finishes</div>
+          <div className="text-xs text-faint">For a scan left running in another tab</div>
+        </div>
+        <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted">
+          {settings.sound ? `${Math.round(settings.volume * 100)}%` : "off"}
+        </span>
+      </div>
+
+      <Slider
+        aria-label="Chime volume"
+        value={settings.volume}
+        disabled={!settings.sound}
+        onChange={(v) => onChange({ volume: v })}
+        // Dragging fires on every pixel; the sound waits for the release so
+        // the notes do not stack on top of each other.
+        onCommit={() => preview({})}
+      />
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {CHIME_NAMES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            disabled={!settings.sound}
+            className={cn(
+              "h-8 rounded-full px-3 text-xs font-medium transition-colors duration-150 disabled:opacity-40",
+              settings.chime === c.id
+                ? "bg-fg text-bg"
+                : "bg-surface-2 text-muted hover:text-fg",
+            )}
+            onClick={() => preview({ chime: c.id as ChimeName })}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsPanel({
   settings,
   onChange,
@@ -508,24 +600,14 @@ function SettingsPanel({
           why="Only when the page carries none of its own"
         />
         <Toggle
-          checked={settings.sound}
-          onChange={(v) => {
-            onChange({ sound: v });
-            if (v) {
-              primeChime();
-              playChime(true);
-            }
-          }}
-          name="Chime when a scan finishes"
-          why="For a scan left running in another tab"
-        />
-        <Toggle
           checked={settings.nativeAsUcid}
           onChange={(v) => onChange({ nativeAsUcid: v })}
           name="Native coins get UCID=<id>"
           why="BTC and the like have no contract for that column"
         />
       </div>
+      <SoundSettings settings={settings} onChange={onChange} />
+
       <div className="mt-4">
         <Button
           variant="primary"

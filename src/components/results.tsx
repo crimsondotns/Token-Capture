@@ -97,7 +97,10 @@ function DexEmbed({ chain, pool }: { chain: string; pool: string }) {
     `https://dexscreener.com/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}` +
     "?embed=1&loadChartSettings=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15";
   return (
-    <div className="relative mb-3 w-full overflow-hidden rounded-2xl bg-black pt-[48%] shadow-ring">
+    // A gentler radius than the cards around it: DexScreener draws its own
+    // header flush to the top corners of the frame, so anything rounder eats
+    // the token name out of it.
+    <div className="relative mb-3 w-full overflow-hidden rounded-lg bg-black pt-[48%] shadow-ring">
       <iframe
         title="DexScreener"
         src={src}

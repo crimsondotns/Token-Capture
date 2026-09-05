@@ -1,3 +1,5 @@
+import type { ChimeName } from "./chime";
+
 export type Source = "dex" | "cmc";
 export type SourcePref = "auto" | Source;
 
@@ -52,6 +54,9 @@ export type Settings = {
   deriveAvatar: boolean;
   nativeAsUcid: boolean;
   sound: boolean;
+  /** 0-1, as the slider reports it. */
+  volume: number;
+  chime: ChimeName;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -61,6 +66,8 @@ export const DEFAULT_SETTINGS: Settings = {
   deriveAvatar: true,
   nativeAsUcid: true,
   sound: true,
+  volume: 0.9,
+  chime: "chime",
 };
 
 export const DEX_COLUMNS = [
