@@ -17,7 +17,7 @@ Open http://localhost:8080. Paste a URL or pick a sample, then press Scan.
 npm run build
 ```
 
-Chrome extension: `public/xcap-extension.zip` (v2.2.0). Load unpacked from `public/xcap-extension/`.
+Chrome extension: `public/xcap-extension.zip` (v2.4.0). Load unpacked from `public/xcap-extension/`.
 
 ## Host on GitHub Pages
 
