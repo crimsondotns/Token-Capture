@@ -379,6 +379,30 @@ function IdleFrame({ children }: { children: React.ReactNode }) {
 // Modal rather than a line in the results: a scan crosses several hosts and
 // can take seconds, and the page underneath is the previous scan's, which is
 // no longer what the answer will be.
+// A logo that fails to load leaves the first letter behind rather than a
+// broken image or a hole where the alignment used to be.
+function ChipLogo({ src, symbol }: { src: string; symbol: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-medium text-muted">
+        {(symbol || "?").slice(0, 1)}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      width={24}
+      height={24}
+      loading="lazy"
+      className="size-6 shrink-0 rounded-full bg-surface-2 object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // What was scanned before, most recent first. Picking one only fills the
 // composer: a scan still has to be asked for, which is the whole posture of
 // this app.
@@ -409,7 +433,7 @@ function History({
         {entries.map((e) => (
           <span
             key={e.query}
-            className="group flex h-11 items-center rounded-full bg-surface pl-4 pr-1 shadow-ring transition-colors duration-150 hover:bg-surface-2"
+            className="group flex h-11 items-center rounded-full bg-surface pl-2.5 pr-1 shadow-ring transition-colors duration-150 hover:bg-surface-2"
           >
             <button
               type="button"
@@ -417,6 +441,7 @@ function History({
               className="flex min-w-0 items-center gap-2 text-left"
               onClick={() => onPick(e)}
             >
+              <ChipLogo src={e.image} symbol={e.label} />
               <span className="max-w-40 truncate text-sm text-fg">{e.label}</span>
               {e.detail ? (
                 <span className="max-w-40 truncate text-xs text-faint">{e.detail}</span>

@@ -11,6 +11,8 @@ export type HistoryEntry = {
   label: string;
   /** The chain the token lives on - ChainID, or CMC's platform name. */
   detail: string;
+  /** The token's logo, if the source gave one. */
+  image: string;
   at: number;
 };
 
@@ -62,6 +64,7 @@ export function rememberScan(
     source,
     label: pairLabel(row) || query.trim(),
     detail: row ? (row.kind === "dex" ? row.chain : row.platformName) : "",
+    image: row ? (row.kind === "dex" ? row.imageUrl : row.avatar) : "",
     at: Date.now(),
   };
   if (!entry.query) return loadHistory();
