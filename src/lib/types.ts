@@ -34,6 +34,24 @@ export type CmcRow = {
 
 export type ScanRow = DexRow | CmcRow;
 
+/**
+ * The headline numbers for the coin as a whole, rather than for any one of
+ * its contracts. Separate from the rows on purpose: it is what the preview
+ * card reads, and none of it belongs in the sheet.
+ */
+export type Overview = {
+  name: string;
+  symbol: string;
+  image: string;
+  priceUsd: string;
+  /** 24h move, as a percentage. */
+  change24h: number | null;
+  rank: number | null;
+  marketCap: string;
+  volume24h: string;
+  url: string;
+};
+
 export type ScanOk = {
   ok: true;
   source: Source;
@@ -41,6 +59,7 @@ export type ScanOk = {
   title: string;
   subtitle: string;
   rows: ScanRow[];
+  overview?: Overview;
 };
 
 export type ScanErr = {

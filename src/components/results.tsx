@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { columnsOf, isCmc, jsonOf, presentRow, tsvOf } from "@/lib/present";
-import type { ScanOk, ScanRow, Settings } from "@/lib/types";
+import type { Overview, ScanOk, ScanRow, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 async function writeClipboard(text: string) {
@@ -92,6 +92,74 @@ async function copyValue_(label: string, text: string) {
   }
 }
 
+function formatUsd(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)} B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)} M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(2)} K`;
+  return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
+// A price can be 68,000 or 0.000000004, so the number of decimals follows the
+// magnitude rather than being fixed.
+function formatPrice(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const digits = n >= 1 ? 2 : n >= 0.01 ? 4 : n >= 0.000001 ? 6 : 10;
+  return `$${n.toLocaleString("en-US", { maximumFractionDigits: digits })}`;
+}
+
+/** The coin at a glance, above its contracts: what a CMC page leads with. */
+function Preview({ overview }: { overview: Overview }) {
+  const change = overview.change24h;
+  return (
+    <div className="mb-3 overflow-hidden rounded-2xl bg-surface shadow-ring">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <Avatar src={overview.image} symbol={overview.symbol} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-muted">
+            {overview.name || overview.symbol}
+            {overview.symbol ? ` (${overview.symbol})` : ""}
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="truncate text-lg font-medium tracking-tight text-fg">
+              {formatPrice(overview.priceUsd)}
+            </span>
+            {change != null ? (
+              <span
+                className={cn(
+                  "text-sm tabular-nums",
+                  change >= 0 ? "text-ok" : "text-warn",
+                )}
+              >
+                {change >= 0 ? "+" : ""}
+                {change.toFixed(2)}%
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      {/* Divided rather than spaced: three figures of different lengths line
+          up on their own columns instead of drifting. */}
+      <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+        <Stat label="Rank" value={overview.rank != null ? `#${overview.rank}` : "—"} />
+        <Stat label="Market cap" value={formatUsd(overview.marketCap)} />
+        <Stat label="Volume 24h" value={formatUsd(overview.volume24h)} />
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-3 py-2.5 text-center">
+      <div className="text-[10px] uppercase tracking-wider text-faint">{label}</div>
+      <div className="mt-0.5 truncate text-sm tabular-nums text-fg">{value}</div>
+    </div>
+  );
+}
+
 function DexEmbed({ chain, pool }: { chain: string; pool: string }) {
   const src =
     `https://dexscreener.com/${encodeURIComponent(chain)}/${encodeURIComponent(pool)}` +
@@ -147,6 +215,7 @@ export function Results({
 
   return (
     <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4">
+      {result.overview ? <Preview overview={result.overview} /> : null}
       {embed ? <DexEmbed chain={embed.chain} pool={embed.poolAddress} /> : null}
 
       <div className="min-h-0 flex-1 overflow-auto pb-2 pt-4">

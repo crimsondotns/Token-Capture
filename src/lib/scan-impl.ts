@@ -1,5 +1,13 @@
 import { rowsFromCmcPage } from "./cmc-page";
-import type { CmcRow, DexRow, ScanOk, ScanResult, Source, SourcePref } from "./types";
+import type {
+  CmcRow,
+  DexRow,
+  Overview,
+  ScanOk,
+  ScanResult,
+  Source,
+  SourcePref,
+} from "./types";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -659,6 +667,26 @@ type CmcPlatform = {
  */
 type PageScan = { found: ScanOk } | { unreachable: true } | null;
 
+// CMC keeps the headline numbers in a statistics object beside the coin, and
+// names the same figure two ways depending on the endpoint, so each is looked
+// up by either name.
+function overviewFromCmc(data: Record<string, unknown>): Overview {
+  const st = asRecord(data.statistics) ?? {};
+  const id = num(data.id);
+  const slug = str(data.slug);
+  return {
+    name: str(data.name),
+    symbol: str(data.symbol),
+    image: id != null ? `https://s2.coinmarketcap.com/static/img/coins/64x64/${id}.png` : "",
+    priceUsd: firstPositive(st.price, st.priceUsd),
+    change24h: num(st.priceChangePercentage24h) ?? num(st.priceChangePercentage24hUsd),
+    rank: num(st.rank) ?? num(data.rank) ?? num(data.cmcRank),
+    marketCap: firstPositive(st.marketCap, st.selfReportedMarketCap, st.fullyDilutedMarketCap),
+    volume24h: firstPositive(st.volume, st.volume24h),
+    url: slug ? `https://coinmarketcap.com/currencies/${slug}/` : "",
+  };
+}
+
 async function scanCmcPage(query: string, slug: string): Promise<PageScan> {
   if (!slug) return null;
   try {
@@ -767,6 +795,7 @@ async function scanCmc(query: string): Promise<ScanResult> {
     title: `${symbol || slug} · #${id ?? "—"}`,
     subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
     rows,
+    overview: overviewFromCmc(data),
   };
 }
 
