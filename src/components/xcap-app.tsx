@@ -349,15 +349,30 @@ function ScanningDialog({ query, source }: { query: string; source: Source }) {
       aria-modal="true"
       aria-busy="true"
       aria-label="Scanning"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-bg/80 backdrop-blur-sm"
     >
       <div className="enter flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface px-6 py-8 text-center shadow-composer">
         <Loader size={28} className="spin-step text-fg" aria-hidden="true" />
-        <div className="space-y-1">
-          <p className="text-base font-medium text-fg">Scanning {source === "cmc" ? "CoinMarketCap" : "DexScreener"}…</p>
-          <p className="pulse-soft truncate text-sm text-muted" title={query}>
-            {query}
+        <div className="w-full space-y-1">
+          <p className="text-base font-medium text-fg">
+            Scanning {source === "cmc" ? "CoinMarketCap" : "DexScreener"}…
           </p>
+          {/* Short queries sit still; only a value too wide to fit runs. */}
+          {query.length > 34 ? (
+            <div
+              className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_2rem,#000_calc(100%-2rem),transparent)]"
+              title={query}
+            >
+              <div className="marquee pulse-soft whitespace-nowrap text-sm text-muted">
+                <span>{query}</span>
+                <span aria-hidden="true">{query}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="pulse-soft truncate text-sm text-muted" title={query}>
+              {query}
+            </p>
+          )}
         </div>
       </div>
     </div>

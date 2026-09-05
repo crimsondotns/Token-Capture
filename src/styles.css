@@ -91,6 +91,26 @@
   .pulse-soft {
     animation: pulse-soft 1.6s ease-in-out infinite;
   }
+  /* A pool URL is longer than any dialog worth showing, so it runs past
+     instead of wrapping or being cut off. The track holds two copies and
+     shifts by exactly one, so the seam never shows. */
+  .marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 14s linear infinite;
+  }
+  .marquee > * {
+    padding-right: 3rem;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes spin-step {
