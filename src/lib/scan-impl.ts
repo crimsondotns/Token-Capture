@@ -1,3 +1,4 @@
+import { rowsFromCmcPage } from "./cmc-page";
 import type { CmcRow, DexRow, ScanOk, ScanResult, Source, SourcePref } from "./types";
 
 const UA =
@@ -650,6 +651,29 @@ type CmcPlatform = {
   platformId?: unknown;
 };
 
+async function scanCmcPage(query: string, slug: string): Promise<ScanOk | null> {
+  if (!slug) return null;
+  try {
+    const html = await fetchText(
+      `https://coinmarketcap.com/currencies/${encodeURIComponent(slug)}/`,
+      12000,
+    );
+    const rows = rowsFromCmcPage(html, slug);
+    if (!rows.length) return null;
+    const first = rows[0];
+    return {
+      ok: true,
+      source: "cmc",
+      query,
+      title: `${first.symbol || slug} · #${first.id ?? "—"}`,
+      subtitle: `${rows.length} contract${rows.length === 1 ? "" : "s"} · ${slug}`,
+      rows,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function scanCmc(query: string): Promise<ScanResult> {
   const target = parseCmcTarget(query);
   const param = target.id
@@ -665,6 +689,11 @@ async function scanCmc(query: string): Promise<ScanResult> {
     data = null;
   }
   if (!data) {
+    // The API answers only to its own origin and refuses a slug it does not
+    // recognise, so fall back to what the extension reads: the coin page's
+    // own source, where the contracts are already rendered.
+    const fromPage = await scanCmcPage(query, target.slug || String(target.id || query));
+    if (fromPage) return fromPage;
     const hint = target.slug || target.id || query;
     throw new Error(
       `No CoinMarketCap coin for “${hint}”. Use a /currencies/… URL or a slug such as bitcoin, tether, solana.`,
